@@ -10,20 +10,20 @@
 #include <string.h>
 #include <signal.h>
 
-char *shared_memory = NULL;
-size_t shared_mem_size = 0;
+char *data_shm = NULL;
+size_t data_shm_size = 0;
 sem_t *sem_free;
 sem_t *sem_filled;
-sem_t *sem_mutex;
+sem_t *sem_i_client_mutex;
 
 void cleanup() {
-    if (shared_memory) {
-        munmap(shared_memory, shared_mem_size);
+    if (data_shm) {
+        munmap(data_shm, data_shm_size);
     }
     sem_close(sem_free);
     sem_close(sem_filled);
-    sem_close(sem_mutex);
-    shm_unlink(SHM_NAME);
+    sem_close(sem_i_client_mutex);
+    shm_unlink(SHM_DATA);
 }
 
 void handle_signal(int sig) {
@@ -33,14 +33,14 @@ void handle_signal(int sig) {
 }
 
 void setup_shared_memory(size_t size) {
-    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
+    int fd = shm_open(SHM_DATA, O_RDWR, 0666);
     if (fd == -1) {
         perror("Error opening shared memory");
         exit(EXIT_FAILURE);
     }
 
-    shared_memory = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (shared_memory == MAP_FAILED) {
+    data_shm = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (data_shm == MAP_FAILED) {
         perror("Error mapping shared memory");
         close(fd);
         exit(EXIT_FAILURE);
@@ -52,9 +52,9 @@ void setup_shared_memory(size_t size) {
 void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
-    sem_mutex = sem_open(SEM_MUTEX, 0);
+    sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }
@@ -69,15 +69,23 @@ void manual_mode(const char *filename) {
 
     char ch;
     int index = 0;
+    int sem_value = 0;
+
     while ((ch = fgetc(file)) != EOF) {
         sem_wait(sem_free);
-        sem_wait(sem_mutex);
+        sem_wait(sem_i_client_mutex);
+
+        sem_value =  sem_getvalue(sem_filled, &index);
+        if (sem_value == -1){
+            perror("Failed to open sem_filled semaphore");
+            exit(EXIT_FAILURE);
+        }
 
         // Write the character to shared memory
-        shared_memory[index] = ch;
-        index = (index + 1) % shared_mem_size;  // Circular buffer
+        data_shm[index] = ch;
+        index = (index + 1) % data_shm_size;  // Circular buffer
 
-        sem_post(sem_mutex);
+        sem_post(sem_i_client_mutex);
         sem_post(sem_filled);
 
         printf("Press Enter to write next character...\n");
@@ -93,15 +101,15 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    shared_mem_size = strtoul(argv[2], NULL, 10);
-    if (shared_mem_size <= 0) {
+    data_shm_size = strtoul(argv[2], NULL, 10);
+    if (data_shm_size <= 0) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
 
     signal(SIGINT, handle_signal);
 
-    setup_shared_memory(shared_mem_size);
+    setup_shared_memory(data_shm_size);
     setup_semaphores();
 
     manual_mode(argv[1]);
