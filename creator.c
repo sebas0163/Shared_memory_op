@@ -11,8 +11,12 @@
 #include <signal.h>
 
 char *data_shm = NULL;      //initialize data shared memory
-int shm_fd = -1;            //initializa file descriptor for shared memory
+int data_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t data_shm_size = 0;   //initialize size of data shared memory
+
+char *control_shm = NULL;      //initialize control shared memory
+int control_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
 
 /**
  * Unmap shared memory files and unlink semaphores
@@ -25,8 +29,8 @@ void cleanup() {
     sem_unlink(SEM_FREE_SPACE);
     sem_unlink(SEM_FILLED_SPACE);
     sem_unlink(SEM_I_CLIENT_MUTEX);
-    if (shm_fd != -1) {
-        close(shm_fd);
+    if (data_shm_fd != -1) {
+        close(data_shm_fd);
     }
 }
 
@@ -114,8 +118,13 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, handle_signal);
 
     // Initialize the shared memory for data
-    initialize_shared_memory(SHM_DATA, data_shm_size, &shm_fd, (void **)&data_shm);
+    initialize_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+
+    // Initialize the shared memory for control
+    initialize_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+
     initialize_semaphores();
+    
     printf("Shared memory and synchronization primitives initialized.\n");
 
     while (1) {
