@@ -10,56 +10,76 @@
 #include <string.h>
 #include <signal.h>
 
-char *shared_memory = NULL;
-int shm_fd = -1;
-size_t shared_mem_size = 0;
+char *data_shm = NULL;      //initialize data shared memory
+int data_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t data_shm_size = 0;   //initialize size of data shared memory
 
+char *control_shm = NULL;      //initialize control shared memory
+int control_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+
+/**
+ * Unmap shared memory files and unlink semaphores
+*/
 void cleanup() {
-    if (shared_memory) {
-        munmap(shared_memory, shared_mem_size);
-        shm_unlink(SHM_NAME);
+    if (data_shm) {
+        munmap(data_shm, data_shm_size);
+        shm_unlink(SHM_DATA);
     }
     sem_unlink(SEM_FREE_SPACE);
     sem_unlink(SEM_FILLED_SPACE);
-    sem_unlink(SEM_MUTEX);
-    if (shm_fd != -1) {
-        close(shm_fd);
+    sem_unlink(SEM_I_CLIENT_MUTEX);
+    if (data_shm_fd != -1) {
+        close(data_shm_fd);
     }
 }
 
+/**
+ * Terminate process with Ctrl+C
+ * 
+ * @param sig
+*/
 void handle_signal(int sig) {
     cleanup();
-    printf("\nTerminating program.\n");
+    printf("\nTerminating process.\n");
     exit(EXIT_SUCCESS);
 }
 
-void initialize_shared_memory(size_t size) {
-    shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
-    if (shm_fd == -1) {
+/**
+ * Initialize shared memory segment
+ *
+ * @param shm_name Name of the shared memory segment to open
+ * @param size The size of the shared memory segment
+ * @param shm_fd Pointer to the file descriptor for the shared memory
+ * @param shm_ptr Pointer to the shared memory location
+ */
+void initialize_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    *shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+    if (*shm_fd == -1) {
         perror("Error opening shared memory");
         exit(EXIT_FAILURE);
     }
 
-    if (ftruncate(shm_fd, size) == -1) {
+    if (ftruncate(*shm_fd, size) == -1) {
         perror("Error setting size of shared memory");
-        close(shm_fd);
+        close(*shm_fd);
         exit(EXIT_FAILURE);
     }
 
-    shared_memory = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (shared_memory == MAP_FAILED) {
+    *shm_ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *shm_fd, 0);
+    if (*shm_ptr == MAP_FAILED) {
         perror("Error mapping shared memory");
-        close(shm_fd);
+        close(*shm_fd);
         exit(EXIT_FAILURE);
     }
 
-    memset(shared_memory, 0, size);
+    memset(*shm_ptr, 0, size);
 }
 
 void initialize_semaphores() {
-    sem_t *sem_free = sem_open(SEM_FREE_SPACE, O_CREAT, 0666, shared_mem_size);
+    sem_t *sem_free = sem_open(SEM_FREE_SPACE, O_CREAT, 0666, data_shm_size);
     sem_t *sem_filled = sem_open(SEM_FILLED_SPACE, O_CREAT, 0666, 0);
-    sem_t *sem_mutex = sem_open(SEM_MUTEX, O_CREAT, 0666, 1);
+    sem_t *sem_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
@@ -74,8 +94,8 @@ void initialize_semaphores() {
 
 void display_memory_contents() {
     printf("\nShared Memory Contents:\n");
-    for (size_t i = 0; i < shared_mem_size; i++) {
-        printf("%02x ", ((unsigned char*)shared_memory)[i]);
+    for (size_t i = 0; i < data_shm_size; i++) {
+        printf("%02x ", ((unsigned char*)data_shm)[i]);
         if ((i + 1) % 32 == 0)
             printf("\n");
     }
@@ -89,20 +109,26 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    shared_mem_size = strtoul(argv[1], NULL, 10);
-    if (shared_mem_size <= 0) {
+    data_shm_size = strtoul(argv[1], NULL, 10);
+    if (data_shm_size <= 0) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
 
     signal(SIGINT, handle_signal);
 
-    initialize_shared_memory(shared_mem_size);
+    // Initialize the shared memory for data
+    initialize_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+
+    // Initialize the shared memory for control
+    initialize_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+
     initialize_semaphores();
+    
     printf("Shared memory and synchronization primitives initialized.\n");
 
     while (1) {
-	system("clear");
+	    system("clear");
         display_memory_contents();
         sleep(2); // Refresh every 2 seconds
     }

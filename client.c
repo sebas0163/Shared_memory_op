@@ -10,20 +10,26 @@
 #include <string.h>
 #include <signal.h>
 
-char *shared_memory = NULL;
-size_t shared_mem_size = 0;
+char *data_shm = NULL;      //initialize data shared memory
+int data_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t data_shm_size = 0;   //initialize size of data shared memory
+
+char *control_shm = NULL;      //initialize control shared memory
+int control_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_mutex;
 
 void cleanup() {
-    if (shared_memory) {
-        munmap(shared_memory, shared_mem_size);
+    if (data_shm) {
+        munmap(data_shm, data_shm_size);
     }
     sem_close(sem_free);
     sem_close(sem_filled);
     sem_close(sem_mutex);
-    shm_unlink(SHM_NAME);
+    shm_unlink(SHM_DATA);
 }
 
 void handle_signal(int sig) {
@@ -32,27 +38,34 @@ void handle_signal(int sig) {
     exit(EXIT_SUCCESS);
 }
 
-void setup_shared_memory(size_t size) {
-    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    if (fd == -1) {
+/**
+ * Set up shared memory
+ *
+ * @param shm_name Name of the shared memory segment to open
+ * @param size Size of the shared memory to map
+ * @param shm_fd Pointer to store the file descriptor of the shared memory
+ * @param shm_ptr Pointer to store the address of the mapped shared memory
+ */
+void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    *shm_fd = shm_open(shm_name, O_RDWR, 0666);
+    if (*shm_fd == -1) {
         perror("Error opening shared memory");
         exit(EXIT_FAILURE);
     }
 
-    shared_memory = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (shared_memory == MAP_FAILED) {
+    *shm_ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *shm_fd, 0);
+    if (*shm_ptr == MAP_FAILED) {
         perror("Error mapping shared memory");
-        close(fd);
+        close(*shm_fd);
+        *shm_fd = -1;  // Reset fd to indicate error
         exit(EXIT_FAILURE);
     }
-
-    close(fd);
 }
 
 void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
-    sem_mutex = sem_open(SEM_MUTEX, 0);
+    sem_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
@@ -74,8 +87,8 @@ void manual_mode(const char *filename) {
         sem_wait(sem_mutex);
 
         // Write the character to shared memory
-        shared_memory[index] = ch;
-        index = (index + 1) % shared_mem_size;  // Circular buffer
+        data_shm[index] = ch;
+        index = (index + 1) % data_shm_size;  // Circular buffer
 
         sem_post(sem_mutex);
         sem_post(sem_filled);
@@ -93,15 +106,17 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    shared_mem_size = strtoul(argv[2], NULL, 10);
-    if (shared_mem_size <= 0) {
+    data_shm_size = strtoul(argv[2], NULL, 10);
+    if (data_shm_size <= 0) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
 
     signal(SIGINT, handle_signal);
 
-    setup_shared_memory(shared_mem_size);
+    setup_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+    setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+
     setup_semaphores();
 
     manual_mode(argv[1]);
