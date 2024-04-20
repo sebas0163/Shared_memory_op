@@ -28,7 +28,7 @@ void cleanup() {
     }
     sem_close(sem_free);
     sem_close(sem_filled);
-    sem_close(sem_mutex);
+    sem_close(sem_i_client_mutex);
     shm_unlink(SHM_DATA);
 }
 
@@ -65,7 +65,7 @@ void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **
 void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
-    sem_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
+    sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
