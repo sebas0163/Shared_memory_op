@@ -9,10 +9,15 @@
 #include <semaphore.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t data_shm_size = 0;   //initialize size of data shared memory
+
+char *tm_shm = NULL;      //initialize timestamps shared memory
+int tm_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
 char *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -73,6 +78,33 @@ void setup_semaphores() {
     }
 }
 
+/**
+ * Returns the index global variable that indicates what character to read
+*/
+int get_index(){
+    sem_wait(sem_i_client_mutex);
+    int index = control_shm[I_CLIENT];  //read global variable
+    control_shm[I_CLIENT]++;    //update global variable
+    sem_post(sem_i_client_mutex);
+    return index;
+}
+
+/**
+ * Writes timestamp to shared memory
+*/
+int write_timestamp(int *index, char *ch){
+    time_t now = time(NULL);
+    struct tm *now_tm = localtime(&now);
+
+    // Buffer to hold the datetime string
+    char datetime_buf[25];
+
+    // Format datetime: e.g., "2023-04-15 12:01:58"
+    strftime(datetime_buf, sizeof(datetime_buf), "%Y-%m-%d %H:%M:%S", now_tm);
+
+    printf("index = %i\tvalue = %c\tdatetime = %s\n", *index, *ch, datetime_buf);
+}
+
 void manual_mode(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -81,28 +113,32 @@ void manual_mode(const char *filename) {
     }
 
     char ch;
-    int index = 0;
-    int sem_value = 0;
+    int index = 0; 
+    int eof = 0;
 
-    while ((ch = fgetc(file)) != EOF) {
-        sem_wait(sem_free);
-        sem_wait(sem_i_client_mutex);
-
-        sem_value =  sem_getvalue(sem_filled, &index);
-        if (sem_value == -1){
-            perror("Failed to open sem_filled semaphore");
-            exit(EXIT_FAILURE);
-        }
-
-        // Write the character to shared memory
-        data_shm[index] = ch;
-        index = (index + 1) % data_shm_size;  // Circular buffer
-
-        sem_post(sem_i_client_mutex);
-        sem_post(sem_filled);
-
-        printf("Press Enter to write next character...\n");
+    printf("Press Enter to write next character...\n");
+    while (eof != 1) {
         while (getchar() != '\n');  // Wait for Enter key
+
+        sem_wait(sem_free);
+
+        // current index (global)
+        index = get_index();
+
+        // Position the file stream to the current index
+        fseek(file, index, SEEK_SET);
+        fread(&ch, 1, 1, file);
+
+        write_timestamp(&index, &ch);
+
+        if (feof(file)) eof = 1;    //reached end of file
+        else{
+            // Write the character to shared memory
+            data_shm[index] = ch;
+            index = (index + 1) % data_shm_size;  // Circular buffer
+
+            sem_post(sem_filled);
+        }
     }
 
     fclose(file);
@@ -114,15 +150,26 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    // Read third argument to set shared memory size
     data_shm_size = strtoul(argv[2], NULL, 10);
     if (data_shm_size <= 0) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
 
+    // set size for timestamps shared memory
+    tm_shm_size = (sizeof(int) + sizeof(char) + sizeof(struct tm)) * data_shm_size;
+
+    // Handle process termination
     signal(SIGINT, handle_signal);
 
+    // Read data shared memory
     setup_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+
+    // Read timestamps shared memory
+    setup_shared_memory(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
+
+    // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
 
     setup_semaphores();

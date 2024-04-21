@@ -9,6 +9,7 @@
 #include <semaphore.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -17,6 +18,11 @@ size_t data_shm_size = 0;   //initialize size of data shared memory
 char *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+
+char *tm_shm = NULL;      //initialize timestamps shared memory
+int tm_shm_fd = -1;            //initialize file descriptor for shared memory
+size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
+
 
 /**
  * Unmap shared memory files and unlink semaphores
@@ -76,12 +82,18 @@ void initialize_shared_memory(const char *shm_name, size_t size, int *shm_fd, vo
     memset(*shm_ptr, 0, size);
 }
 
+/**
+ * Initialize semaphores
+ *  - sem_free: how many spaces available in shared memory
+ *  - sem_filled: how many spaces have been written in shared memory
+ *  - sem_i_client_mutex: mutual exclusion to update global variable cient index
+*/
 void initialize_semaphores() {
     sem_t *sem_free = sem_open(SEM_FREE_SPACE, O_CREAT, 0666, data_shm_size);
     sem_t *sem_filled = sem_open(SEM_FILLED_SPACE, O_CREAT, 0666, 0);
-    sem_t *sem_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
+    sem_t *sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
         cleanup();
         exit(EXIT_FAILURE);
@@ -89,19 +101,18 @@ void initialize_semaphores() {
 
     sem_close(sem_free);
     sem_close(sem_filled);
-    sem_close(sem_mutex);
+    sem_close(sem_i_client_mutex);
 }
 
 void display_memory_contents() {
     printf("\nShared Memory Contents:\n");
     for (size_t i = 0; i < data_shm_size; i++) {
-        printf("%02x ", ((unsigned char*)data_shm)[i]);
-        if ((i + 1) % 32 == 0)
+        printf("%c", ((unsigned char*)data_shm)[i]);
+        if ((i + 1) % 64 == 0)
             printf("\n");
     }
     printf("\n");
 }
-
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -109,28 +120,37 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    // Read second argument to set shared memory size
     data_shm_size = strtoul(argv[1], NULL, 10);
     if (data_shm_size <= 0) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
 
+    // set size for timestamps shared memory
+    tm_shm_size = (sizeof(int) + sizeof(char) + sizeof(struct tm)) * data_shm_size;
+
+    // Handle process termination
     signal(SIGINT, handle_signal);
 
     // Initialize the shared memory for data
     initialize_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
 
+    // Initialize the shared memory for timestamps
+    initialize_shared_memory(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
+
     // Initialize the shared memory for control
     initialize_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
 
+    // Initialize general semaphores
     initialize_semaphores();
     
     printf("Shared memory and synchronization primitives initialized.\n");
 
     while (1) {
 	    system("clear");
-        display_memory_contents();
-        sleep(2); // Refresh every 2 seconds
+        display_memory_contents();  // Print memory content to console
+        sleep(1); // Refresh every second
     }
 
     cleanup(); // Clean resources on exit
