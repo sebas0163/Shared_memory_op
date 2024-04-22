@@ -15,13 +15,21 @@ char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t data_shm_size = 0;   //initialize size of data shared memory
 
-char *tm_shm = NULL;      //initialize timestamps shared memory
+//define struct to store info about timestamp
+typedef struct TmStruct {
+    char ch;
+    int i;
+    struct tm dtm;
+} TmStruct;
+
+TmStruct *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
 char *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+
 
 sem_t *sem_free;
 sem_t *sem_filled;
@@ -96,13 +104,22 @@ int write_timestamp(int *index, char *ch){
     time_t now = time(NULL);
     struct tm *now_tm = localtime(&now);
 
+    int i = (*index) % data_shm_size;  // get position in shared memory
+
+    // Define timestamp struct
+    TmStruct timestamp;
+    timestamp.ch = *ch;
+    timestamp.i = *index;
+    timestamp.dtm = *now_tm;
+
+    tm_shm[i] = timestamp;
+
     // Buffer to hold the datetime string
     char datetime_buf[25];
-
     // Format datetime: e.g., "2023-04-15 12:01:58"
-    strftime(datetime_buf, sizeof(datetime_buf), "%Y-%m-%d %H:%M:%S", now_tm);
+    strftime(datetime_buf, sizeof(datetime_buf), "%Y-%m-%d %H:%M:%S", &tm_shm[i].dtm);
 
-    printf("index = %i\tvalue = %c\tdatetime = %s\n", *index, *ch, datetime_buf);
+    printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
 }
 
 void manual_mode(const char *filename) {
@@ -122,20 +139,22 @@ void manual_mode(const char *filename) {
 
         sem_wait(sem_free);
 
-        // current index (global)
+        // get current value and update value of index (global)
         index = get_index();
 
         // Position the file stream to the current index
         fseek(file, index, SEEK_SET);
         fread(&ch, 1, 1, file);
 
-        write_timestamp(&index, &ch);
-
         if (feof(file)) eof = 1;    //reached end of file
         else{
+            // write timestamp to shared memory
+            write_timestamp(&index, &ch);
+
             // Write the character to shared memory
+            index = index % data_shm_size;  // Circular buffer
+            
             data_shm[index] = ch;
-            index = (index + 1) % data_shm_size;  // Circular buffer
 
             sem_post(sem_filled);
         }
@@ -157,14 +176,14 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // set size for timestamps shared memory
-    tm_shm_size = (sizeof(int) + sizeof(char) + sizeof(struct tm)) * data_shm_size;
-
     // Handle process termination
     signal(SIGINT, handle_signal);
 
     // Read data shared memory
     setup_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+
+    // Set size for timestamps shared memory
+    tm_shm_size = sizeof(TmStruct) * data_shm_size;
 
     // Read timestamps shared memory
     setup_shared_memory(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
