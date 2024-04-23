@@ -28,19 +28,34 @@ size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 GtkTextBuffer *buffer;
 
 /**
- * Unmap shared memory files and unlink semaphores
-*/
+ * Unlink and close shared memory segments.
+ * @param shm_name Name of the shared memory segment.
+ * @param size Size of the shared memory.
+ * @param shm_fd Pointer to the file descriptor of the shared memory.
+ * @param shm_ptr Pointer to the mapped shared memory.
+ */
+void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    if (*shm_ptr) {
+        munmap(*shm_ptr, size);
+        *shm_ptr = NULL;
+    }
+
+    if (*shm_fd != -1) {
+        close(*shm_fd);
+        *shm_fd = -1;
+    }
+
+    shm_unlink(shm_name);
+}
+
+/**
+ * Clean up resources including shared memory and semaphores.
+ */
 void cleanup() {
-    if (data_shm) {
-        munmap(data_shm, data_shm_size);
-        shm_unlink(SHM_DATA);
-    }
-    sem_unlink(SEM_FREE_SPACE);
-    sem_unlink(SEM_FILLED_SPACE);
-    sem_unlink(SEM_I_CLIENT_MUTEX);
-    if (data_shm_fd != -1) {
-        close(data_shm_fd);
-    }
+    // Clean up shared memory segments
+    unlink_shared_mem(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+    unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+    unlink_shared_mem(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
 }
 
 /**

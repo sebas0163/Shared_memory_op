@@ -30,7 +30,6 @@ int *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
 
-
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
