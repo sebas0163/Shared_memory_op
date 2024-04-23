@@ -10,6 +10,7 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <gtk/gtk.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -23,6 +24,8 @@ char *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
+// Global pointer to the text buffer
+GtkTextBuffer *buffer;
 
 /**
  * Unmap shared memory files and unlink semaphores
@@ -114,7 +117,76 @@ void display_memory_contents() {
     printf("\n");
 }
 
-int main(int argc, char *argv[]) {
+/**
+ * Function to update the text view content.
+ * @param new_text: The text to be set in the text view.
+ */
+void edit_text(const char *new_text) {
+    GtkTextIter start, end;
+
+    // Get the start and end iterators of the text buffer
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    // Replace the current content with the new text
+    gtk_text_buffer_delete(buffer, &start, &end);
+    gtk_text_buffer_insert(buffer, &start, new_text, -1);
+}
+
+/**
+ * Callback function to update the timer text.
+ * @param user_data: User data provided when the callback is called (unused).
+ * @return gboolean: Whether to continue the timer, return FALSE to stop.
+ */
+static gboolean update_timer(gpointer user_data) {
+    static unsigned int seconds_elapsed = 0;
+    char timer_text[50];
+
+    // Format the timer text with the elapsed seconds
+    snprintf(timer_text, sizeof(timer_text), "Time: %u seconds", seconds_elapsed);
+
+    // Update the text view with the new timer text
+    edit_text(timer_text);
+
+    // Increment the counter
+    seconds_elapsed++;
+
+    return G_SOURCE_CONTINUE; // Continue calling this function
+}
+
+/**
+ * Function to set up and show the GTK application window and its components.
+ * @param app: The GTK application instance.
+ * @param user_data: User data provided when the callback is called (unused).
+ */
+static void activate(GtkApplication* app, gpointer user_data) {
+    GtkWidget *window;
+    GtkWidget *text_view;
+
+    // Create a new window with the specified title and default size
+    window = gtk_application_window_new(app);
+    gtk_window_set_title(GTK_WINDOW(window), "Creator");
+    gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
+
+    // Create a new text view, set it to non-editable, and get its buffer
+    text_view = gtk_text_view_new();
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
+
+    // Add the text view to the window and display everything
+    gtk_container_add(GTK_CONTAINER(window), text_view);
+    gtk_widget_show_all(window);
+
+    // Set up a timer to call update_timer every second
+    g_timeout_add_seconds(1, (GSourceFunc)update_timer, NULL);
+}
+
+int main(int argc, char **argv) {
+
+    GtkApplication *app;
+    int status;
+    
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <memory size in bytes>\n", argv[0]);
         return EXIT_FAILURE;
@@ -145,15 +217,16 @@ int main(int argc, char *argv[]) {
     // Initialize general semaphores
     initialize_semaphores();
     
-    printf("Shared memory and synchronization primitives initialized.\n");
-
-    while (1) {
-	    system("clear");
-        display_memory_contents();  // Print memory content to console
-        sleep(1); // Refresh every second
-    }
+    // Create a new GTK application instance
+    app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+    // Connect the 'activate' signal, which sets up the window and its contents
+    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
+    // Run the application, which calls the 'activate' function
+    status = g_application_run(G_APPLICATION(app), 0, NULL);
+    // Clean up the application instance after the application quits
+    g_object_unref(app);
 
     cleanup(); // Clean resources on exit
-    return EXIT_SUCCESS;
+    return status;
 }
 

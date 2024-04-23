@@ -9,6 +9,10 @@ MEMORY_SIZE = 4096  # Set default memory size in bytes
 CONSTANTS = constants.h
 TEXT_FILE = lorem.txt # Set default text file to read
 
+# Use pkg-config for GTK+ flags
+GTK_LIBS = $(shell pkg-config --libs gtk+-3.0)
+GTK_CFLAGS = $(shell pkg-config --cflags gtk+-3.0)
+
 # Default target
 all: $(CREATOR_BIN) $(CLIENT_BIN)
 
@@ -16,7 +20,7 @@ $(CLIENT_BIN): $(CLIENT_SRC) $(CONSTANTS)
 	$(GCC) $(CFLAGS) $< -o $@
 
 $(CREATOR_BIN): $(CREATOR_SRC) $(CONSTANTS) 
-	$(GCC) $(CFLAGS) $< -o $@
+	$(GCC) $(CFLAGS) `pkg-config --cflags gtk+-3.0` -o $@ $< `pkg-config --libs gtk+-3.0`
 
 # Phony targets for cleaning up and running
 .PHONY: clean run_creator run_client

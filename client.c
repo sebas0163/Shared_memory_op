@@ -122,7 +122,7 @@ int write_timestamp(int *index, char *ch){
     printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
 }
 
-void manual_mode(const char *filename) {
+void execute_mode(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Failed to open file");
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
 
     setup_semaphores();
 
-    manual_mode(argv[1]);
+    execute_mode(argv[1]);
 
     cleanup();
     return EXIT_SUCCESS;
