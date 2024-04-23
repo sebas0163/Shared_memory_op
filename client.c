@@ -163,9 +163,49 @@ void execute_mode(const char *filename) {
     fclose(file);
 }
 
+/**
+ * Reads command-line arguments and returns mode
+ * @param argv: CLI arguments array
+ * @return int: -1 if an error ocurred, else: returns mode code
+*/
+int get_mode(char *argv[]){
+    char *endptr;
+    int mode = strtol(argv[3], &endptr, 10); // set mode
+    // Check for errors: No digits were found or the number is out of range
+    if (endptr == argv[3] || *endptr != '\0') {
+        fprintf(stderr, "Invalid mode number: %s\n", argv[1]);
+        return -1;
+    } else if (!(mode == 0 || mode == 1)){  // only two modes are allowed
+        fprintf(stderr, "Invalid mode: %s\n", argv[1]);
+        return -1;
+    }
+    return mode;
+}
+
+/**
+ * Reads command-line arguments and returns automatic period (in ms)
+ * @param argv: CLI arguments array
+ * @return int: -1 if an error ocurred, else: returns period
+*/
+int get_period(char *argv[]){
+    char *endptr;
+    int period = strtol(argv[4], &endptr, 10); // set mode
+    // Check for errors: No digits were found or the number is out of range
+    if (endptr == argv[4] || *endptr != '\0') {
+        fprintf(stderr, "Invalid period number: %s\n", argv[1]);
+        return -1;
+    } else if (period <= 0){  // only two modes are allowed
+        fprintf(stderr, "Invalid period: %s\n", argv[1]);
+        return -1;
+    }
+    return period;
+}
+
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <filename> <memory size in bytes>\n", argv[0]);
+    int mode;
+    int period;
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <filename> <memory size in bytes> <mode> <period>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -175,6 +215,14 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
+
+    // set mode (user or automatic)
+    mode = get_mode(argv);
+    if (mode == -1) return EXIT_FAILURE;
+
+    //set period for automatic mode
+    period = get_period(argv);
+    if (period == -1) return EXIT_FAILURE;
 
     // Handle process termination
     signal(SIGINT, handle_signal);

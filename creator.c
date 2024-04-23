@@ -138,7 +138,7 @@ void edit_text(const char *new_text) {
  * @param user_data: User data provided when the callback is called (unused).
  * @return gboolean: Whether to continue the timer, return FALSE to stop.
  */
-static gboolean update_timer(gpointer user_data) {
+static gboolean update_text_content(gpointer user_data) {
     char window_text[data_shm_size+50];
 
     // Format the window text
@@ -175,8 +175,8 @@ static void activate(GtkApplication* app, gpointer user_data) {
     gtk_container_add(GTK_CONTAINER(window), text_view);
     gtk_widget_show_all(window);
 
-    // Set up a timer to call update_timer every second
-    g_timeout_add_seconds(1, (GSourceFunc)update_timer, NULL);
+    // Set up a timer to call update_text_content every second
+    g_timeout_add_seconds(1, (GSourceFunc)update_text_content, NULL);
 }
 
 int main(int argc, char **argv) {

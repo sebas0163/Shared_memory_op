@@ -5,13 +5,11 @@ CLIENT_BIN = client
 CLIENT_SRC = client.c
 GCC = gcc
 CFLAGS = -lrt
-MEMORY_SIZE = 4096  # Set default memory size in bytes
+MEMORY_SIZE = 4096  	# Set default memory size in bytes
 CONSTANTS = constants.h
-TEXT_FILE = lorem.txt # Set default text file to read
-
-# Use pkg-config for GTK+ flags
-GTK_LIBS = $(shell pkg-config --libs gtk+-3.0)
-GTK_CFLAGS = $(shell pkg-config --cflags gtk+-3.0)
+TEXT_FILE = lorem.txt 	# Set default text file to read
+MODE = 1 	#0 = manual mode, 1 = automatic mode
+PERIOD = 1000	#miliseconds transcurred between every client read/write
 
 # Default target
 all: $(CREATOR_BIN) $(CLIENT_BIN)
@@ -32,4 +30,4 @@ run_creator:
 	./$(CREATOR_BIN) $(MEMORY_SIZE)
 
 run_client:
-	./$(CLIENT_BIN) $(TEXT_FILE) $(MEMORY_SIZE) 
+	./$(CLIENT_BIN) $(TEXT_FILE) $(MEMORY_SIZE) $(MODE) $(PERIOD)
