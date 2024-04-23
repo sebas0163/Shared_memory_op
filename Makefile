@@ -28,4 +28,4 @@ run_creator:
 	./$(CREATOR_BIN) $(MEMORY_SIZE)
 
 run_client:
-	./$(CLIENT_BIN) $(TEXT_FILE) $(MEMORY_SIZE)
+	./$(CLIENT_BIN) $(TEXT_FILE) $(MEMORY_SIZE) 

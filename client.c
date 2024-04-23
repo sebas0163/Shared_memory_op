@@ -26,7 +26,7 @@ TmStruct *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
-char *control_shm = NULL;      //initialize control shared memory
+int *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
 
