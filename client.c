@@ -35,16 +35,60 @@ sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
 
-void cleanup() {
-    if (data_shm) {
-        munmap(data_shm, data_shm_size);
+/**
+ * Unlink and close shared memory segments.
+ * @param shm_name Name of the shared memory segment.
+ * @param size Size of the shared memory.
+ * @param shm_fd Pointer to the file descriptor of the shared memory.
+ * @param shm_ptr Pointer to the mapped shared memory.
+ */
+void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    if (*shm_ptr) {
+        munmap(*shm_ptr, size);
+        *shm_ptr = NULL;
     }
-    sem_close(sem_free);
-    sem_close(sem_filled);
-    sem_close(sem_i_client_mutex);
-    shm_unlink(SHM_DATA);
+
+    if (*shm_fd != -1) {
+        close(*shm_fd);
+        *shm_fd = -1;
+    }
+
+    shm_unlink(shm_name);
 }
 
+
+/**
+ * Close and unlink a semaphore.
+ * @param sem_name Name of the semaphore to unlink.
+ * @param sem_ptr Pointer to the semaphore pointer.
+ */
+void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
+    if (*sem_ptr != SEM_FAILED) {
+        sem_close(*sem_ptr);  // Close the semaphore
+        sem_unlink(sem_name); // Unlink the semaphore from the system
+        *sem_ptr = SEM_FAILED; // Set the semaphore pointer to SEM_FAILED to indicate it's closed
+    }
+}
+
+/**
+ * Clean up resources including shared memory and semaphores.
+ */
+void cleanup() {
+    // Clean up shared memory segments
+    unlink_shared_mem(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+    unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+    unlink_shared_mem(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
+
+    // Close semaphores and unlink them
+    close_semaphore(SEM_FREE_SPACE, &sem_free);
+    close_semaphore(SEM_FILLED_SPACE, &sem_filled);
+    close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
+}
+
+
+/**
+ * Clean up when terminating program with Ctrl-c
+*/
 void handle_signal(int sig) {
     cleanup();
     printf("\nTerminating program.\n");
