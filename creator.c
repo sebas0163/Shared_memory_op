@@ -139,17 +139,13 @@ void edit_text(const char *new_text) {
  * @return gboolean: Whether to continue the timer, return FALSE to stop.
  */
 static gboolean update_timer(gpointer user_data) {
-    static unsigned int seconds_elapsed = 0;
-    char timer_text[50];
+    char window_text[data_shm_size+50];
 
-    // Format the timer text with the elapsed seconds
-    snprintf(timer_text, sizeof(timer_text), "Time: %u seconds", seconds_elapsed);
+    // Format the window text
+    snprintf(window_text, sizeof(window_text), "Shared Memory Contents:\n\n%s", data_shm);
 
-    // Update the text view with the new timer text
-    edit_text(timer_text);
-
-    // Increment the counter
-    seconds_elapsed++;
+    // Update the text view
+    edit_text(window_text);
 
     return G_SOURCE_CONTINUE; // Continue calling this function
 }
