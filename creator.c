@@ -166,7 +166,8 @@ static void activate(GtkApplication* app, gpointer user_data) {
     // Create a new window with the specified title and default size
     window = gtk_application_window_new(app);
     gtk_window_set_title(GTK_WINDOW(window), "Creator");
-    gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
+    // gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
+    gtk_window_maximize(GTK_WINDOW(window));
 
     // Create a new text view, set it to non-editable, and get its buffer
     text_view = gtk_text_view_new();
