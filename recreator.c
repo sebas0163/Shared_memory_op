@@ -186,7 +186,7 @@ void execute_mode(const char *filename, int mode, int period) {
     }
 
     char ch;
-    char null_ch = 0x2a;
+    char null_ch = 0x2a;    //asterisk character
     int index = 0; 
     int eof = 0;
 
@@ -309,7 +309,9 @@ int main(int argc, char *argv[]) {
 
     // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
-    control_shm[2] ++;
+
+    control_shm[2] ++; //register new process to processes counter
+
     setup_semaphores();
 
     execute_mode(argv[1], mode, period);

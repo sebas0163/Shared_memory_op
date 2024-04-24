@@ -238,6 +238,8 @@ void execute_mode(const char *filename, int mode, int period) {
     char ch;
     int index = 0; 
     int eof = 0;
+    char blank_ch = 32;     //blank space
+    char null_ch = 0x2a;    // asterisk character
 
     if (mode == 0) printf("Press Enter to write next character...\n");
 
@@ -261,12 +263,14 @@ void execute_mode(const char *filename, int mode, int period) {
         fseek(file, index, SEEK_SET);
         fread(&ch, 1, 1, file);
 
-        char blank = 32;    //blank space
-        fseek(file, index, SEEK_SET);
-        fputc(blank, file);     //overwrite position with blank space
-
         if (feof(file)) eof = 1;    //reached end of file
         else{
+
+            fseek(file, index, SEEK_SET);
+            fputc(blank_ch, file);     //overwrite position with blank space
+
+            text_buffer[index] = null_ch; // update 
+
             // write timestamp to shared memory
             read_timestamp(&index, &ch);
 
@@ -442,7 +446,8 @@ int main(int argc, char *argv[]) {
 
     // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
-    control_shm[2] ++;
+
+    control_shm[2] ++; //register new process to processes counter
 
     setup_semaphores();
 
