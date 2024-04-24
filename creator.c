@@ -147,7 +147,7 @@ static gboolean update_text_content(gpointer user_data) {
     char window_text[data_shm_size+50];
 
     // Format the window text
-    snprintf(window_text, sizeof(window_text), "Shared Memory Contents:\n\n%s", data_shm);
+    snprintf(window_text, sizeof(window_text), "Shared Memory contents:\n\n%s", data_shm);
 
     // Update the text view
     edit_text(window_text);
