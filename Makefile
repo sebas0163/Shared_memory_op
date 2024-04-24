@@ -16,7 +16,7 @@ MODE = 1 	#0 = manual mode, 1 = automatic mode
 PERIOD = 500	#miliseconds transcurred between every client read/write
 
 # Default target
-all: $(CREATOR_BIN) $(CLIENT_BIN) $(RECREATOR_BIN)
+all: $(CREATOR_BIN) $(CLIENT_BIN) $(RECREATOR_BIN) $(STADISTICS_BIN)
 
 $(CLIENT_BIN): $(CLIENT_SRC) $(CONSTANTS)
 	$(GCC) $(CFLAGS) $< -o $@
@@ -33,7 +33,7 @@ $(STADISTICS_BIN): $(STADISTICS_SRC) $(CONSTANTS)
 .PHONY: clean run_creator run_client run_stadistics
 
 clean:
-	rm -f $(CREATOR_BIN) $(CLIENT_BIN) $(RECREATOR_BIN)
+	rm -f $(CREATOR_BIN) $(CLIENT_BIN) $(RECREATOR_BIN) $(STADISTICS_BIN)
 
 run_creator:
 	./$(CREATOR_BIN) $(MEMORY_SIZE)

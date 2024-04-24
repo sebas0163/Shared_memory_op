@@ -10,6 +10,9 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -26,13 +29,31 @@ TmStruct *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
-int *control_shm = NULL;      //initialize control shared memory
+long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
-size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
+
+struct rusage ru;          // Estructura con los datos del proceso
 
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_recr_mutex;
+sem_t *sem_i_client_process;
+
+void checkProcess(){
+    control_shm[2] --;
+    if(control_shm[2]==0){
+        system("./stadistics > stats.txt");
+    }
+}
+void getstadistics(){
+    getrusage(RUSAGE_SELF, &ru);
+    sem_wait(sem_i_client_process);
+    control_shm[10]+=ru.ru_stime.tv_usec;
+    control_shm[11] += ru.ru_utime.tv_usec;
+    checkProcess();
+    sem_post(sem_i_client_process);
+}
 
 /**
  * Close and unlink a semaphore.
@@ -55,13 +76,15 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_RECR_MUTEX, &sem_i_recr_mutex);
+    close_semaphore(SEM_I_CLIENT_PROCESS, &sem_i_client_process);
 }
 
 
 /**
  * Clean up when terminating process with Ctrl-c
 */
-void handle_signal(int sig) {
+void handle_end(int sig) {
+    getstadistics();
     cleanup();
     printf("\nTerminating process.\n");
     exit(EXIT_SUCCESS);
@@ -95,8 +118,9 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_recr_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
+    sem_i_client_process =sem_open(SEM_I_CLIENT_PROCESS,0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }
@@ -106,7 +130,11 @@ void setup_semaphores() {
  * Returns the index global variable that indicates the position of the char in file
 */
 int get_index(){
+    struct timespec inicio, fin;
+    clock_gettime(CLOCK_MONOTONIC, &inicio);
     sem_wait(sem_i_recr_mutex);
+    clock_gettime(CLOCK_MONOTONIC, &fin);
+    control_shm[4]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100;
     int index = control_shm[I_RECREATOR];  //read global variable
     control_shm[I_RECREATOR]++;    //update global variable
     sem_post(sem_i_recr_mutex);
@@ -172,6 +200,7 @@ void execute_mode(const char *filename, int mode, int period) {
         else{
 
             // Write the character to shared memory
+            control_shm[5] ++;
             int i_shm = index % data_shm_size;  // Circular buffer
             ch = data_shm[i_shm];   //get current value
             data_shm[i_shm] = 0;    // set to null
@@ -252,7 +281,7 @@ int main(int argc, char *argv[]) {
     
 
     // Handle process termination
-    signal(SIGINT, handle_signal);
+    signal(SIGINT, handle_end);
 
     // Read data shared memory
     setup_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
@@ -265,12 +294,11 @@ int main(int argc, char *argv[]) {
 
     // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
-
+    control_shm[2] ++;
     setup_semaphores();
 
     execute_mode(argv[1], mode, period);
-    
-    cleanup();
+    handle_end(1);
     
     return EXIT_SUCCESS;
 }

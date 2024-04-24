@@ -66,21 +66,6 @@ void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
         *sem_ptr = SEM_FAILED; // Set the semaphore pointer to SEM_FAILED to indicate it's closed
     }
 }
-void checkProcess(){
-    control_shm[2] --;
-    if(control_shm[2]==0){
-        system("./stadistics");
-    }
-}
-void getstadistics(){
-    sem_wait(sem_i_client_process);
-    getrusage(RUSAGE_SELF, &ru);
-    control_shm[8] += ru.ru_utime.tv_usec;
-    control_shm[9]+=ru.ru_stime.tv_usec;
-    checkProcess();
-    sem_post(sem_i_client_process);
-}
-
 /**
  * Clean up resources including shared memory and semaphores.
  */

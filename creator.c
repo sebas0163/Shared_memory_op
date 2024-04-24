@@ -113,7 +113,7 @@ void initialize_semaphores() {
     sem_t *sem_i_recr_mutex = sem_open(SEM_I_RECR_MUTEX, O_CREAT, 0666, 1);
     sem_t *sem_i_client_process = sem_open(SEM_I_CLIENT_PROCESS,O_CREAT,0666,1);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
         cleanup();
         exit(EXIT_FAILURE);
