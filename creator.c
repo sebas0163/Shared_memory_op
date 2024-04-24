@@ -18,7 +18,7 @@ size_t data_shm_size = 0;   //initialize size of data shared memory
 
 char *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
-size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
 
 char *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -111,8 +111,9 @@ void initialize_semaphores() {
     sem_t *sem_filled = sem_open(SEM_FILLED_SPACE, O_CREAT, 0666, 0);
     sem_t *sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
     sem_t *sem_i_recr_mutex = sem_open(SEM_I_RECR_MUTEX, O_CREAT, 0666, 1);
+    sem_t *sem_n_process = sem_open(SEM_n_PROCESS,O_CREAT,0666,1);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_n_process == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
         cleanup();
         exit(EXIT_FAILURE);
@@ -122,6 +123,7 @@ void initialize_semaphores() {
     sem_close(sem_filled);
     sem_close(sem_i_client_mutex);
     sem_close(sem_i_recr_mutex);
+    sem_close(sem_n_process);
 }
 
 /**

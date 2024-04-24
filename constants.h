@@ -7,6 +7,8 @@
 
 #define SEM_FREE_SPACE "/sem_free_space"
 #define SEM_FILLED_SPACE "/sem_filled_space"
+#define SEM_I_CLIENT_MUTEX "/sem_mutex"
+#define SEM_n_PROCESS "/sem_process"
 
 #define SEM_I_CLIENT_MUTEX "/sem_i_client_mutex"
 #define SEM_I_RECR_MUTEX "/sem_i_recr_mutex"
