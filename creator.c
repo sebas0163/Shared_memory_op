@@ -111,7 +111,7 @@ void initialize_semaphores() {
     sem_t *sem_filled = sem_open(SEM_FILLED_SPACE, O_CREAT, 0666, 0);
     sem_t *sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
     sem_t *sem_i_recr_mutex = sem_open(SEM_I_RECR_MUTEX, O_CREAT, 0666, 1);
-    sem_t *sem_n_process = sem_open(SEM_n_PROCESS,O_CREAT,0666,1);
+    sem_t *sem_n_process = sem_open(SEM_N_PROCESS,O_CREAT,0666,1);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_n_process == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
@@ -147,7 +147,7 @@ void edit_text(const char *new_text) {
  * @param user_data: User data provided when the callback is called (unused).
  * @return gboolean: Whether to continue the timer, return FALSE to stop.
  */
-static gboolean update_text_content(gpointer user_data) {
+static gboolean update_creator_content(gpointer user_data) {
     char window_text[data_shm_size+50];
 
     // Format the window text
@@ -164,7 +164,7 @@ static gboolean update_text_content(gpointer user_data) {
  * @param app: The GTK application instance.
  * @param user_data: User data provided when the callback is called (unused).
  */
-static void activate(GtkApplication* app, gpointer user_data) {
+static void activate_creator_win(GtkApplication* app, gpointer user_data) {
     GtkWidget *window;
     GtkWidget *text_view;
     GtkWidget *scrolled_window;
@@ -196,8 +196,8 @@ static void activate(GtkApplication* app, gpointer user_data) {
     // Display everything
     gtk_widget_show_all(window);
 
-    // Set up a timer to call update_text_content every second
-    g_timeout_add_seconds(1, (GSourceFunc)update_text_content, NULL);
+    // Set up a timer to call update_creator_content every second
+    g_timeout_add_seconds(1, (GSourceFunc)update_creator_content, NULL);
 }
 
 int main(int argc, char **argv) {
@@ -236,9 +236,9 @@ int main(int argc, char **argv) {
     initialize_semaphores();
     
     // Create a new GTK application instance
-    app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+    app = gtk_application_new("org.gtk.creator", G_APPLICATION_FLAGS_NONE);
     // Connect the 'activate' signal, which sets up the window and its contents
-    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
+    g_signal_connect(app, "activate", G_CALLBACK(activate_creator_win), NULL);
     // Run the application, which calls the 'activate' function
     status = g_application_run(G_APPLICATION(app), 0, NULL);
     // Clean up the application instance after the application quits

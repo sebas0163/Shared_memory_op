@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <gtk/gtk.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -38,16 +39,32 @@ sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
 sem_t *sem_n_process;
+
+// Global pointer to the GTK text buffer
+GtkTextBuffer *buffer;
+
+// Global pointer to text buffer
+char *text_buffer;
+long filesize;
+
+typedef struct {
+    char *filename;
+    int mode;
+    int period;
+} ExecuteModeArgs;
+
+
 /**
-This function count how many chars still in the buffer
+ * Count how many chars still in the buffer
 */
 void getBuffChar(){
-    for (int i =0; i <data_shm_size; i++){
-        if (data_shm[i] !=0){
+    for (int i =0; i < data_shm_size; i++){
+        if (data_shm[i] > 0 && data_shm[i] != 0x2a ){   // 0x0 and 0x2a are used as null chars 
             control_shm[6] ++;
         }
     }
 }
+
 /**
 This function check if this is the only process in execution, if this is true, open the stadistics process
 */
@@ -59,7 +76,7 @@ void checkProcess(){
     }
 }
 /**
-This module ask for this process stadistics 
+ * Get current process stadistics 
 */
 void getstadistics(){
     getrusage(RUSAGE_SELF, &ru);
@@ -90,10 +107,12 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
-    close_semaphore(SEM_n_PROCESS,&sem_n_process);
+    close_semaphore(SEM_N_PROCESS,&sem_n_process);
+
+    free(text_buffer);
 }
 /**
-This module handle de end of the process
+ * Handles the termination of the process
 */
 void handle_end(int sig) {
     getstadistics();
@@ -130,7 +149,7 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
-    sem_n_process =sem_open(SEM_n_PROCESS,0);
+    sem_n_process =sem_open(SEM_N_PROCESS,0);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_n_process == SEM_FAILED) {
         perror("Failed to open semaphore");
@@ -178,12 +197,43 @@ int read_timestamp(int *index, char *ch){
     printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
 }
 
+/**
+ * Set global text buffer with the content of original file
+ * @param file_ptr: Pointer to file pointer
+*/
+void set_text_buffer(FILE **file_ptr){
+    // Determine the file size
+    fseek(*file_ptr, 0, SEEK_END);
+    filesize = ftell(*file_ptr);
+    rewind(*file_ptr);
+
+    // Allocate memory for the file content
+    text_buffer = malloc(filesize + 1);
+    if (text_buffer == NULL) {
+        fclose(*file_ptr);
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Read the file into buffer
+    size_t bytesRead = fread(text_buffer, 1, filesize, *file_ptr);
+    if (bytesRead != filesize) {
+        free(text_buffer);
+        fclose(*file_ptr);
+        fprintf(stderr, "Error reading file\n");
+        exit(EXIT_FAILURE);
+    }
+    text_buffer[bytesRead] = '\0'; // Null-terminate the string
+}
+
 void execute_mode(const char *filename, int mode, int period) {
     FILE *file = fopen(filename, "r+");
     if (!file) {
         perror("Failed to open file");
         exit(EXIT_FAILURE);
     }
+
+    set_text_buffer(&file); // set global buffer with original file content
 
     char ch;
     int index = 0; 
@@ -203,7 +253,6 @@ void execute_mode(const char *filename, int mode, int period) {
         time_+= ((fin.tv_sec - inicio.tv_sec)*1000+(fin.tv_nsec-inicio.tv_nsec)/1000000);
         int sem_value;
         sem_getvalue(sem_free, &sem_value);
-        printf("sem_free: %d\n", sem_value);
 
         // get current value and update value of index (global)
         index = get_index();
@@ -227,11 +276,17 @@ void execute_mode(const char *filename, int mode, int period) {
 
             sem_post(sem_filled);
             sem_getvalue(sem_filled, &sem_value);
-            printf("sem_filled: %d\n", sem_value);
         }
     }
 
     fclose(file);
+}
+
+// Thread function to execute mode
+void* execute_mode_thread(void *arg) {
+    ExecuteModeArgs *args = (ExecuteModeArgs *)arg;
+    execute_mode(args->filename, args->mode, args->period);
+    return NULL;
 }
 
 /**
@@ -272,9 +327,86 @@ int get_period(char *argv[]){
     return period;
 }
 
+/**
+ * Function to update the text view content.
+ * @param new_text: The text to be set in the text view.
+ */
+void edit_text(const char *new_text) {
+    GtkTextIter start, end;
+
+    // Get the start and end iterators of the text buffer
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    // Replace the current content with the new text
+    gtk_text_buffer_delete(buffer, &start, &end);
+    gtk_text_buffer_insert(buffer, &start, new_text, -1);
+}
+
+/**
+ * Callback function to update the text.
+ * @param user_data: User data provided when the callback is called (unused).
+ * @return gboolean: Whether to continue the timer, return FALSE to stop.
+ */
+static gboolean update_client_content(gpointer user_data) {
+    char window_text[filesize+50];
+
+    // Format the window text
+    snprintf(window_text, sizeof(window_text), "File contents:\n\n%s", text_buffer);
+
+    // Update the text view
+    edit_text(window_text);
+
+    return G_SOURCE_CONTINUE; // Continue calling this function
+}
+
+/**
+ * Function to set up and show the GTK application window and its components.
+ * @param app: The GTK application instance.
+ * @param user_data: User data provided when the callback is called (unused).
+ */
+static void activate_client_win(GtkApplication* app, gpointer user_data) {
+    GtkWidget *window;
+    GtkWidget *text_view;
+    GtkWidget *scrolled_window;
+
+    // Create a new window with the specified title
+    window = gtk_application_window_new(app);
+    gtk_window_set_title(GTK_WINDOW(window), "Client");
+    gtk_window_maximize(GTK_WINDOW(window));    //maximize window
+
+    // Create a new text view, set it to non-editable, and get its buffer
+    text_view = gtk_text_view_new();
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);  // Ensure wrapping at character level
+
+     // Create a scrolled window
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                   GTK_POLICY_NEVER,  // Never create a horizontal scrollbar
+                                   GTK_POLICY_AUTOMATIC); // Automatically create a vertical scrollbar when needed
+
+    // Add the text view to the scrolled window
+    gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
+
+    // Add the scrolled window to the window
+    gtk_container_add(GTK_CONTAINER(window), scrolled_window);
+
+    // Display everything
+    gtk_widget_show_all(window);
+
+    // Set up a timer to call update_client_content every second
+    g_timeout_add_seconds(1, (GSourceFunc)update_client_content, NULL);
+}
+
 int main(int argc, char *argv[]) {
-    int mode;
-    int period;
+    GtkApplication *app;
+    int status, mode, period;
+    pthread_t mode_thread;
+    ExecuteModeArgs args;
+
     if (argc != 5) {
         fprintf(stderr, "Usage: %s <filename> <memory size in bytes> <mode> <period>\n", argv[0]);
         return EXIT_FAILURE;
@@ -294,7 +426,7 @@ int main(int argc, char *argv[]) {
     //set period for automatic mode
     period = get_period(argv);
     if (period == -1) return EXIT_FAILURE;
-    
+
 
     // Handle process termination
     signal(SIGINT, handle_end);
@@ -314,7 +446,26 @@ int main(int argc, char *argv[]) {
 
     setup_semaphores();
 
-    execute_mode(argv[1], mode, period);
+    //set thread args
+    args.filename = argv[1];
+    args.mode = mode;
+    args.period = period;
+
+    // Run execute_mode in a separate thread
+    pthread_create(&mode_thread, NULL, execute_mode_thread, &args);
+
+    // Create a new GTK application instance
+    app = gtk_application_new("org.gtk.client", G_APPLICATION_FLAGS_NONE);
+    // Connect the 'activate' signal, which sets up the window and its contents
+    g_signal_connect(app, "activate", G_CALLBACK(activate_client_win), NULL);
+    // Run the application, which calls the 'activate' function
+    status = g_application_run(G_APPLICATION(app), 0, NULL);
+    // Clean up the application instance after the application quits
+    g_object_unref(app);
+
+    // Wait for the execute_mode thread to finish
+    pthread_join(mode_thread, NULL);
+
     handle_end(1);
     return EXIT_SUCCESS;
 }
