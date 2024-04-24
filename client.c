@@ -33,7 +33,7 @@ long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
 struct rusage ru;          // Estructura con los datos del proceso
-
+double time_ =0;
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
@@ -66,6 +66,7 @@ void getstadistics(){
     sem_wait(sem_n_process);
     control_shm[9]+=ru.ru_stime.tv_usec;
     control_shm[8] += ru.ru_utime.tv_usec;
+    control_shm[3] += time_;
     checkProcess();
     sem_post(sem_n_process);
 }
@@ -145,7 +146,7 @@ int get_index(){
     clock_gettime(CLOCK_MONOTONIC, &inicio);
     sem_wait(sem_i_client_mutex);
     clock_gettime(CLOCK_MONOTONIC, &fin);
-    control_shm[3]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100;
+    time_+= ((fin.tv_sec - inicio.tv_sec)*1000+(fin.tv_nsec-inicio.tv_nsec)/1000000);
     int index = control_shm[I_CLIENT];  //read global variable
     control_shm[I_CLIENT]++;    //update global variable
     sem_post(sem_i_client_mutex);
@@ -195,7 +196,11 @@ void execute_mode(const char *filename, int mode, int period) {
         if (mode == 1) {
             usleep(period * 1000); //sleep in microseconds (if automatic mode)
         }
+        struct timespec inicio, fin;
+        clock_gettime(CLOCK_MONOTONIC, &inicio);
         sem_wait(sem_free);
+        clock_gettime(CLOCK_MONOTONIC, &fin);
+        time_+= ((fin.tv_sec - inicio.tv_sec)*1000+(fin.tv_nsec-inicio.tv_nsec)/1000000);
         int sem_value;
         sem_getvalue(sem_free, &sem_value);
         printf("sem_free: %d\n", sem_value);

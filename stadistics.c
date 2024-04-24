@@ -80,8 +80,8 @@ void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **
 */
 void getstadistics(){
     control_shm[7]=(control_shm[5]*sizeof(char)+ control_shm[5]*sizeof(TmStruct)+ 12*sizeof(long));
-    printf("Tiempo bloqueado del Cliente %ld ns\n" , control_shm[3]);
-    printf("Tiempo bloqueado del Reconstructor %ld ns\n", control_shm[4]);
+    printf("Tiempo bloqueado del Cliente %ld ms\n" , control_shm[3]);
+    printf("Tiempo bloqueado del Reconstructor %ld ms\n", control_shm[4]);
     printf("Caracteres transferidos %ld\n", control_shm[5]);
     printf("Caracteres en buffer %ld\n", control_shm[6]);
     printf("Memoria usada %ld bytes\n", control_shm[7]);

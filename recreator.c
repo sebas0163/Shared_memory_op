@@ -32,7 +32,7 @@ size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
-
+double time_ =0;
 struct rusage ru;          // Estructura con los datos del proceso
 
 sem_t *sem_free;
@@ -67,6 +67,7 @@ void getstadistics(){
     sem_wait(sem_n_process);
     control_shm[10]+=ru.ru_stime.tv_usec;
     control_shm[11] += ru.ru_utime.tv_usec;
+    control_shm[4] += time_;
     checkProcess();
     sem_post(sem_n_process);
 }
@@ -150,7 +151,7 @@ int get_index(){
     clock_gettime(CLOCK_MONOTONIC, &inicio);
     sem_wait(sem_i_recr_mutex);
     clock_gettime(CLOCK_MONOTONIC, &fin);
-    control_shm[4]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100; //here we set the blocked time
+    time_ += ((fin.tv_sec - inicio.tv_sec)*1000+(fin.tv_nsec-inicio.tv_nsec)/1000000); //here we set the blocked time
     int index = control_shm[I_RECREATOR];  //read global variable
     control_shm[I_RECREATOR]++;    //update global variable
     sem_post(sem_i_recr_mutex);
@@ -203,8 +204,11 @@ void execute_mode(const char *filename, int mode, int period) {
         int sem_value;
         sem_getvalue(sem_filled, &sem_value);
         printf("sem_filled: %d\n", sem_value);
+        struct timespec inicio, fin;
+        clock_gettime(CLOCK_MONOTONIC, &inicio);
         sem_wait(sem_filled);
-
+        clock_gettime(CLOCK_MONOTONIC, &fin);
+        time_ += ((fin.tv_sec - inicio.tv_sec)*1000+(fin.tv_nsec-inicio.tv_nsec)/1000000);
         // get current value and update value of index (global)
         index = get_index();
 
