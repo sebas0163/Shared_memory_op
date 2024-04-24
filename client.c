@@ -455,7 +455,9 @@ int main(int argc, char *argv[]) {
     pthread_create(&mode_thread, NULL, execute_mode_thread, &args);
 
     // Create a new GTK application instance
-    app = gtk_application_new("org.gtk.client", G_APPLICATION_FLAGS_NONE);
+    char app_id[100] = "org.gtk.client";
+    sprintf(app_id + strlen(app_id), "%ld", control_shm[2]); //set unique ID
+    app = gtk_application_new(app_id, G_APPLICATION_FLAGS_NONE);
     // Connect the 'activate' signal, which sets up the window and its contents
     g_signal_connect(app, "activate", G_CALLBACK(activate_client_win), NULL);
     // Run the application, which calls the 'activate' function
