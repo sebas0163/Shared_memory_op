@@ -1,4 +1,9 @@
+.vscode/
 brk*
 creator
 client
+window*
+datetime_size*
+recreator
+
 

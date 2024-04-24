@@ -1,0 +1,9 @@
+TIempo bloqueado del Cliente 425 ns
+TIempo bloqueado del Reconstructor 285 ns
+Caracteres transferidos 39
+Caracteres en buffer 8
+Memoria usada 2631 bytes
+ Tiempo en modo usuario del cliente 4166 ns 
+Tiempo en modo kernel del cliente 11210 ns 
+Tiempo en modo usuario del reconstructor 5653 ns 
+Tiempo en modo kernel del reconstructor 4862 ns 
