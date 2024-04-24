@@ -176,7 +176,8 @@ void execute_mode(const char *filename, int mode, int period) {
     int index = 0; 
     int eof = 0;
 
-    printf("Press Enter to write next character...\n");
+    if (mode == 0) printf("Press Enter to write next character...\n");
+    
     while (eof != 1) {
         if (mode == 0) while (getchar() != '\n');  // Wait for Enter key (if manual mode)
         if (mode == 1) {
