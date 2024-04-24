@@ -39,6 +39,21 @@ sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
 sem_t *sem_i_client_process;
 
+
+void checkProcess(){
+    control_shm[2] --;
+    if(control_shm[2]==0){
+        system("./stadistics > stats.txt");
+    }
+}
+void getstadistics(){
+    getrusage(RUSAGE_SELF, &ru);
+    sem_wait(sem_i_client_process);
+    control_shm[9]+=ru.ru_stime.tv_usec;
+    control_shm[8] += ru.ru_utime.tv_usec;
+    checkProcess();
+    sem_post(sem_i_client_process);
+}
 /**
  * Close and unlink a semaphore.
  * @param sem_name Name of the semaphore to unlink.
