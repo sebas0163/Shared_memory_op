@@ -146,6 +146,7 @@ void execute_mode(const char *filename, int mode, int period) {
     }
 
     char ch;
+    char null_ch = 2;
     int index = 0; 
     int eof = 0;
 
@@ -174,7 +175,7 @@ void execute_mode(const char *filename, int mode, int period) {
             // Write the character to shared memory
             int i_shm = index % data_shm_size;  // Circular buffer
             ch = data_shm[i_shm];   //get current value
-            data_shm[i_shm] = 0;    // set to null
+            data_shm[i_shm] = null_ch;    // set to null
 
             fseek(file, index, SEEK_SET);
             fputc(ch, file);
