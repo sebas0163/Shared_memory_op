@@ -122,16 +122,6 @@ void initialize_semaphores() {
     sem_close(sem_i_client_mutex);
 }
 
-void display_memory_contents() {
-    printf("\nShared Memory Contents:\n");
-    for (size_t i = 0; i < data_shm_size; i++) {
-        printf("%c", ((unsigned char*)data_shm)[i]);
-        if ((i + 1) % 64 == 0)
-            printf("\n");
-    }
-    printf("\n");
-}
-
 /**
  * Function to update the text view content.
  * @param new_text: The text to be set in the text view.
@@ -173,21 +163,33 @@ static gboolean update_text_content(gpointer user_data) {
 static void activate(GtkApplication* app, gpointer user_data) {
     GtkWidget *window;
     GtkWidget *text_view;
+    GtkWidget *scrolled_window;
 
-    // Create a new window with the specified title and default size
+    // Create a new window with the specified title
     window = gtk_application_window_new(app);
     gtk_window_set_title(GTK_WINDOW(window), "Creator");
-    // gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
-    gtk_window_maximize(GTK_WINDOW(window));
+    gtk_window_maximize(GTK_WINDOW(window));    //maximize window
 
     // Create a new text view, set it to non-editable, and get its buffer
     text_view = gtk_text_view_new();
     buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
     gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);  // Ensure wrapping at character level
 
-    // Add the text view to the window and display everything
-    gtk_container_add(GTK_CONTAINER(window), text_view);
+     // Create a scrolled window
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                   GTK_POLICY_NEVER,  // Never create a horizontal scrollbar
+                                   GTK_POLICY_AUTOMATIC); // Automatically create a vertical scrollbar when needed
+
+    // Add the text view to the scrolled window
+    gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
+
+    // Add the scrolled window to the window
+    gtk_container_add(GTK_CONTAINER(window), scrolled_window);
+
+    // Display everything
     gtk_widget_show_all(window);
 
     // Set up a timer to call update_text_content every second

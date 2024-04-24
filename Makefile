@@ -9,7 +9,7 @@ MEMORY_SIZE = 4096  	# Set default memory size in bytes
 CONSTANTS = constants.h
 TEXT_FILE = lorem.txt 	# Set default text file to read
 MODE = 1 	#0 = manual mode, 1 = automatic mode
-PERIOD = 1000	#miliseconds transcurred between every client read/write
+PERIOD = 500	#miliseconds transcurred between every client read/write
 
 # Default target
 all: $(CREATOR_BIN) $(CLIENT_BIN)

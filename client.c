@@ -165,7 +165,7 @@ int write_timestamp(int *index, char *ch){
     printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
 }
 
-void execute_mode(const char *filename) {
+void execute_mode(const char *filename, int mode, int period) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Failed to open file");
@@ -178,8 +178,10 @@ void execute_mode(const char *filename) {
 
     printf("Press Enter to write next character...\n");
     while (eof != 1) {
-        while (getchar() != '\n');  // Wait for Enter key
-
+        if (mode == 0) while (getchar() != '\n');  // Wait for Enter key (if manual mode)
+        if (mode == 1) {
+            usleep(period * 1000); //sleep in microseconds (if automatic mode)
+        }
         sem_wait(sem_free);
 
         // get current value and update value of index (global)
@@ -266,6 +268,7 @@ int main(int argc, char *argv[]) {
     //set period for automatic mode
     period = get_period(argv);
     if (period == -1) return EXIT_FAILURE;
+    
 
     // Handle process termination
     signal(SIGINT, handle_signal);
@@ -284,7 +287,7 @@ int main(int argc, char *argv[]) {
 
     setup_semaphores();
 
-    execute_mode(argv[1]);
+    execute_mode(argv[1], mode, period);
 
     cleanup();
     return EXIT_SUCCESS;
