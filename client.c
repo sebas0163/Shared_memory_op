@@ -31,12 +31,13 @@ size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
 long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
-size_t control_shm_size = sizeof(long) * 9;   //initialize size of data shared memory
+size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
 struct rusage ru;          // Estructura con los datos del proceso
 
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
+sem_t *sem_i_client_process;
 
 /**
  * Close and unlink a semaphore.
@@ -50,18 +51,19 @@ void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
         *sem_ptr = SEM_FAILED; // Set the semaphore pointer to SEM_FAILED to indicate it's closed
     }
 }
-void getstadistics(){
-    getrusage(RUSAGE_SELF, &ru);
-    control_shm[8] += ru.ru_utime.tv_usec;
-    control_shm[9]+=ru.ru_stime.tv_usec;
-    printf("Valor modo usuario %ld\n", control_shm[8]);
-    printf("Valor modo kernel %ld\n", control_shm[3]);
-}
 void checkProcess(){
     control_shm[2] --;
     if(control_shm[2]==0){
         system("./stadistics");
     }
+}
+void getstadistics(){
+    sem_wait(sem_i_client_process);
+    getrusage(RUSAGE_SELF, &ru);
+    control_shm[8] += ru.ru_utime.tv_usec;
+    control_shm[9]+=ru.ru_stime.tv_usec;
+    checkProcess();
+    sem_post(sem_i_client_process);
 }
 
 /**
@@ -72,11 +74,11 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
+    close_semaphore(SEM_I_CLIENT_PROCESS,&sem_i_client_process);
 }
 void handle_end(int sig) {
     getstadistics();
     cleanup();
-    checkProcess();
     printf("\nTerminating program.\n");
     exit(EXIT_SUCCESS);
 }
@@ -109,8 +111,9 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
+    sem_i_client_process =sem_open(SEM_I_CLIENT_PROCESS,0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }
@@ -120,11 +123,11 @@ void setup_semaphores() {
  * Returns the index global variable that indicates what character to read
 */
 int get_index(){
-    clock_t inicio, fin;
-    inicio = clock();
+    struct timespec inicio, fin;
+    clock_gettime(CLOCK_MONOTONIC, &inicio);
     sem_wait(sem_i_client_mutex);
-    fin = clock();
-    control_shm[3]+= (long)(fin-inicio)/CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &fin);
+    control_shm[3]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100;
     int index = control_shm[I_CLIENT];  //read global variable
     control_shm[I_CLIENT]++;    //update global variable
     sem_post(sem_i_client_mutex);
