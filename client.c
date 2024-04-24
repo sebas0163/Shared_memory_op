@@ -37,22 +37,37 @@ struct rusage ru;          // Estructura con los datos del proceso
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
-sem_t *sem_i_client_process;
-
-
+sem_t *sem_n_process;
+/**
+This function count how many chars still in the buffer
+*/
+void getBuffChar(){
+    for (int i =0; i <data_shm_size; i++){
+        if (data_shm[i] !=0){
+            control_shm[6] ++;
+        }
+    }
+}
+/**
+This function check if this is the only process in execution, if this is true, open the stadistics process
+*/
 void checkProcess(){
     control_shm[2] --;
     if(control_shm[2]==0){
+        getBuffChar();
         system("./stadistics > stats.txt");
     }
 }
+/**
+This module ask for this process stadistics 
+*/
 void getstadistics(){
     getrusage(RUSAGE_SELF, &ru);
-    sem_wait(sem_i_client_process);
+    sem_wait(sem_n_process);
     control_shm[9]+=ru.ru_stime.tv_usec;
     control_shm[8] += ru.ru_utime.tv_usec;
     checkProcess();
-    sem_post(sem_i_client_process);
+    sem_post(sem_n_process);
 }
 /**
  * Close and unlink a semaphore.
@@ -74,8 +89,11 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
-    close_semaphore(SEM_I_CLIENT_PROCESS,&sem_i_client_process);
+    close_semaphore(SEM_n_PROCESS,&sem_n_process);
 }
+/**
+This module handle de end of the process
+*/
 void handle_end(int sig) {
     getstadistics();
     cleanup();
@@ -111,9 +129,9 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
-    sem_i_client_process =sem_open(SEM_I_CLIENT_PROCESS,0);
+    sem_n_process =sem_open(SEM_n_PROCESS,0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_n_process == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }

@@ -38,21 +38,37 @@ struct rusage ru;          // Estructura con los datos del proceso
 sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_recr_mutex;
-sem_t *sem_i_client_process;
-
+sem_t *sem_n_process;
+/**
+This function count how many chars still in the buffer
+*/
+void getBuffChar(){
+    for (int i =0; i <data_shm_size; i++){
+        if (data_shm[i] !=0){
+            control_shm[6] ++;
+        }
+    }
+}
+/**
+This function check if this is the only process in execution, if this is true, open the stadistics process
+*/
 void checkProcess(){
     control_shm[2] --;
     if(control_shm[2]==0){
+        getBuffChar();
         system("./stadistics > stats.txt");
     }
 }
+/**
+This module ask for this process stadistics 
+*/
 void getstadistics(){
     getrusage(RUSAGE_SELF, &ru);
-    sem_wait(sem_i_client_process);
+    sem_wait(sem_n_process);
     control_shm[10]+=ru.ru_stime.tv_usec;
     control_shm[11] += ru.ru_utime.tv_usec;
     checkProcess();
-    sem_post(sem_i_client_process);
+    sem_post(sem_n_process);
 }
 
 /**
@@ -76,7 +92,7 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_RECR_MUTEX, &sem_i_recr_mutex);
-    close_semaphore(SEM_I_CLIENT_PROCESS, &sem_i_client_process);
+    close_semaphore(SEM_n_PROCESS, &sem_n_process);
 }
 
 
@@ -118,9 +134,9 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_recr_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
-    sem_i_client_process =sem_open(SEM_I_CLIENT_PROCESS,0);
+    sem_n_process =sem_open(SEM_n_PROCESS,0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED || sem_n_process == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }
@@ -134,7 +150,7 @@ int get_index(){
     clock_gettime(CLOCK_MONOTONIC, &inicio);
     sem_wait(sem_i_recr_mutex);
     clock_gettime(CLOCK_MONOTONIC, &fin);
-    control_shm[4]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100;
+    control_shm[4]+= ((fin.tv_sec - inicio.tv_sec)+(fin.tv_nsec-inicio.tv_nsec))/100; //here we set the blocked time
     int index = control_shm[I_RECREATOR];  //read global variable
     control_shm[I_RECREATOR]++;    //update global variable
     sem_post(sem_i_recr_mutex);
@@ -200,7 +216,7 @@ void execute_mode(const char *filename, int mode, int period) {
         else{
 
             // Write the character to shared memory
-            control_shm[5] ++;
+            control_shm[5] ++; //here we increment the counter of chars transferred
             int i_shm = index % data_shm_size;  // Circular buffer
             ch = data_shm[i_shm];   //get current value
             data_shm[i_shm] = 0;    // set to null
@@ -298,7 +314,7 @@ int main(int argc, char *argv[]) {
     setup_semaphores();
 
     execute_mode(argv[1], mode, period);
-    handle_end(1);
+    handle_end(1); // this always handle the end of the process 
     
     return EXIT_SUCCESS;
 }

@@ -19,6 +19,12 @@ long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
 
+typedef struct TmStruct {
+    char ch;
+    int i;
+    struct tm dtm;
+} TmStruct;
+
 /**
  * Unlink and close shared memory segments.
  * @param shm_name Name of the shared memory segment.
@@ -39,6 +45,9 @@ void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **sh
 
     shm_unlink(shm_name);
 }
+/**
+Close the shared memory 
+*/
 void cleanup(){
     unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
 }
@@ -66,36 +75,21 @@ void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **
         exit(EXIT_FAILURE);
     }
 }
-//Leer los datos de la memoria 
+/**
+ This function takes the process information from the shared memory
+*/
 void getstadistics(){
-    printf("TIempo bloqueado del Cliente %ld\n", control_shm[3]);
-    printf("TIempo bloqueado del Reconstructor %ld\n", control_shm[4]);
+    control_shm[7]=(control_shm[5]*sizeof(char)+ control_shm[5]*sizeof(TmStruct)+ 12*sizeof(long));
+    printf("Tiempo bloqueado del Cliente %ld ns\n" , control_shm[3]);
+    printf("Tiempo bloqueado del Reconstructor %ld ns\n", control_shm[4]);
     printf("Caracteres transferidos %ld\n", control_shm[5]);
     printf("Caracteres en buffer %ld\n", control_shm[6]);
-    printf("Memoria usada %ld\n", control_shm[7]);
-    printf("Tiempo en modo usuario del cliente %ld\n", control_shm[8]);
-    printf("Tiempo en modo kernel del cliente %ld\n", control_shm[9]);
-    printf("Tiempo en modo usuario del reconstructor %ld\n", control_shm[10]);
-    printf("Tiempo en modo kernel del reconstructor %ld\n", control_shm[11]);
+    printf("Memoria usada %ld bytes\n", control_shm[7]);
+    printf("Tiempo en modo usuario del cliente %ld ns \n", control_shm[8]);
+    printf("Tiempo en modo kernel del cliente %ld ns \n", control_shm[9]);
+    printf("Tiempo en modo usuario del reconstructor %ld ns \n", control_shm[10]);
+    printf("Tiempo en modo kernel del reconstructor %ld ns \n", control_shm[11]);
 }
-
-//imprimir los datos  
-
-//conversión a segundos
-
-// sincronización
-
-struct rusage ru;
-void prueba(){
-    int i = 5000;
-    int j =0;
-    while (i !=0){
-        j ++;
-        i --;
-        printf("Numero %d\n", j);
-    }
-}
-
 int main(){
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
     getstadistics();
