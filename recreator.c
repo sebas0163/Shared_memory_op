@@ -32,7 +32,7 @@ size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared me
 
 sem_t *sem_free;
 sem_t *sem_filled;
-sem_t *sem_i_client_mutex;
+sem_t *sem_i_recr_mutex;
 
 /**
  * Close and unlink a semaphore.
@@ -54,7 +54,7 @@ void cleanup() {
     // Close semaphores and unlink them
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
-    close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
+    close_semaphore(SEM_I_RECR_MUTEX, &sem_i_recr_mutex);
 }
 
 
@@ -94,22 +94,22 @@ void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **
 void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
-    sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
+    sem_i_recr_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED) {
         perror("Failed to open semaphore");
         exit(EXIT_FAILURE);
     }
 }
 
 /**
- * Returns the index global variable that indicates what character to read
+ * Returns the index global variable that indicates the position of the char in file
 */
 int get_index(){
-    sem_wait(sem_i_client_mutex);
-    int index = control_shm[I_CLIENT];  //read global variable
-    control_shm[I_CLIENT]++;    //update global variable
-    sem_post(sem_i_client_mutex);
+    sem_wait(sem_i_recr_mutex);
+    int index = control_shm[I_RECREATOR];  //read global variable
+    control_shm[I_RECREATOR]++;    //update global variable
+    sem_post(sem_i_recr_mutex);
     return index;
 }
 
@@ -149,17 +149,17 @@ void execute_mode(const char *filename, int mode, int period) {
     int index = 0; 
     int eof = 0;
 
-    if (mode == 0) printf("Press Enter to write next character...\n");
+    if (mode == 0) printf("Press Enter to recreate next character...\n");
 
     while (eof != 1) {
         if (mode == 0) while (getchar() != '\n');  // Wait for Enter key (if manual mode)
         if (mode == 1) {
             usleep(period * 1000); //sleep in microseconds (if automatic mode)
         }
-        sem_wait(sem_free);
         int sem_value;
-        sem_getvalue(sem_free, &sem_value);
-        printf("sem_free: %d\n", sem_value);
+        sem_getvalue(sem_filled, &sem_value);
+        printf("sem_filled: %d\n", sem_value);
+        sem_wait(sem_filled);
 
         // get current value and update value of index (global)
         index = get_index();
@@ -168,22 +168,21 @@ void execute_mode(const char *filename, int mode, int period) {
         fseek(file, index, SEEK_SET);
         fread(&ch, 1, 1, file);
 
-        char blank = 32;    //blank space
-        fseek(file, index, SEEK_SET);
-        fputc(blank, file);     //overwrite position with blank space
-
         if (feof(file)) eof = 1;    //reached end of file
         else{
-            // write timestamp to shared memory
-            read_timestamp(&index, &ch);
 
             // Write the character to shared memory
-            index = index % data_shm_size;  // Circular buffer
-            data_shm[index] = ch;
+            int i_shm = index % data_shm_size;  // Circular buffer
+            ch = data_shm[i_shm];   //get current value
+            data_shm[i_shm] = 0;    // set to null
 
-            sem_post(sem_filled);
-            sem_getvalue(sem_filled, &sem_value);
-            printf("sem_filled: %d\n", sem_value);
+            fseek(file, index, SEEK_SET);
+            fputc(ch, file);
+
+            // read timestamp from shared memory
+            //read_timestamp(&index, &ch);
+
+            sem_post(sem_free);
         }
     }
 
