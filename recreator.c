@@ -44,7 +44,7 @@ This function count how many chars still in the buffer
 */
 void getBuffChar(){
     for (int i =0; i <data_shm_size; i++){
-        if (data_shm[i] !=0){
+        if (data_shm[i] > 0 && data_shm[i] != 0x2a){
             control_shm[6] ++;
         }
     }
@@ -92,7 +92,7 @@ void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_RECR_MUTEX, &sem_i_recr_mutex);
-    close_semaphore(SEM_n_PROCESS, &sem_n_process);
+    close_semaphore(SEM_N_PROCESS, &sem_n_process);
 }
 
 
@@ -134,7 +134,7 @@ void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
     sem_i_recr_mutex = sem_open(SEM_I_CLIENT_MUTEX, 0);
-    sem_n_process =sem_open(SEM_n_PROCESS,0);
+    sem_n_process =sem_open(SEM_N_PROCESS,0);
 
     if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_recr_mutex == SEM_FAILED || sem_n_process == SEM_FAILED) {
         perror("Failed to open semaphore");
@@ -167,19 +167,14 @@ int read_timestamp(int *index, char *ch){
     int i = (*index) % data_shm_size;  // get position in shared memory
 
     // Define timestamp struct
-    TmStruct timestamp;
-    timestamp.ch = *ch;
-    timestamp.i = *index;
-    timestamp.dtm = *now_tm;
-
-    tm_shm[i] = timestamp;
+    TmStruct tm = tm_shm[i];
 
     // Buffer to hold the datetime string
     char datetime_buf[25];
     // Format datetime: e.g., "2023-04-15 12:01:58"
-    strftime(datetime_buf, sizeof(datetime_buf), "%Y-%m-%d %H:%M:%S", &tm_shm[i].dtm);
+    strftime(datetime_buf, sizeof(datetime_buf), "%Y-%m-%d %H:%M:%S", &tm.dtm);
 
-    printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
+    printf("index = %i\tvalue = %c\tdatetime = %s\n", tm.i, tm.ch, datetime_buf);
 }
 
 void execute_mode(const char *filename, int mode, int period) {
@@ -190,7 +185,7 @@ void execute_mode(const char *filename, int mode, int period) {
     }
 
     char ch;
-    char null_ch = 2;
+    char null_ch = 0x2a;
     int index = 0; 
     int eof = 0;
 
@@ -201,9 +196,6 @@ void execute_mode(const char *filename, int mode, int period) {
         if (mode == 1) {
             usleep(period * 1000); //sleep in microseconds (if automatic mode)
         }
-        int sem_value;
-        sem_getvalue(sem_filled, &sem_value);
-        printf("sem_filled: %d\n", sem_value);
         sem_wait(sem_filled);
 
         // get current value and update value of index (global)
@@ -226,7 +218,7 @@ void execute_mode(const char *filename, int mode, int period) {
             fputc(ch, file);
 
             // read timestamp from shared memory
-            //read_timestamp(&index, &ch);
+            read_timestamp(&index, &ch);
 
             sem_post(sem_free);
         }

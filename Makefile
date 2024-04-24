@@ -8,7 +8,7 @@ RECREATOR_SRC = recreator.c
 STADISTICS_BIN = stadistics
 STADISTICS_SRC = stadistics.c
 GCC = gcc
-CFLAGS = -lrt
+CFLAGS = -lrt -pthread
 MEMORY_SIZE = 8  	# Set default memory size in bytes
 CONSTANTS = constants.h
 TEXT_FILE = lorem.txt 	# Set default text file to read
@@ -19,7 +19,7 @@ PERIOD = 500	#miliseconds transcurred between every client read/write
 all: $(CREATOR_BIN) $(CLIENT_BIN) $(RECREATOR_BIN) $(STADISTICS_BIN)
 
 $(CLIENT_BIN): $(CLIENT_SRC) $(CONSTANTS)
-	$(GCC) $(CFLAGS) $< -o $@
+	$(GCC) $(CFLAGS) `pkg-config --cflags gtk+-3.0` -o $@ $< `pkg-config --libs gtk+-3.0`
 
 $(RECREATOR_BIN): $(RECREATOR_SRC) $(CONSTANTS)
 	$(GCC) $(CFLAGS) $< -o $@
@@ -43,5 +43,6 @@ run_client:
 
 run_recreator:
 	./$(RECREATOR_BIN) $(TEXT_FILE) $(MEMORY_SIZE) $(MODE) $(PERIOD)
+
 run_stadistics:
 	./$(STADISTICS_BIN)
