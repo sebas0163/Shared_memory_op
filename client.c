@@ -10,6 +10,9 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -26,9 +29,10 @@ TmStruct *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
-int *control_shm = NULL;      //initialize control shared memory
+long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
-size_t control_shm_size = sizeof(int) * 3;   //initialize size of data shared memory
+size_t control_shm_size = sizeof(long) * 9;   //initialize size of data shared memory
+struct rusage ru;          // Estructura con los datos del proceso
 
 sem_t *sem_free;
 sem_t *sem_filled;
@@ -46,24 +50,34 @@ void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
         *sem_ptr = SEM_FAILED; // Set the semaphore pointer to SEM_FAILED to indicate it's closed
     }
 }
+void getstadistics(){
+    getrusage(RUSAGE_SELF, &ru);
+    control_shm[8] += ru.ru_utime.tv_usec;
+    control_shm[9]+=ru.ru_stime.tv_usec;
+    printf("Valor modo usuario %ld\n", control_shm[8]);
+    printf("Valor modo kernel %ld\n", control_shm[3]);
+}
+void checkProcess(){
+    control_shm[2] --;
+    if(control_shm[2]==0){
+        system("./stadistics");
+    }
+}
 
 /**
  * Clean up resources including shared memory and semaphores.
  */
-void cleanup() {
     // Close semaphores and unlink them
+void cleanup() {
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
     close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
 }
-
-
-/**
- * Clean up when terminating process with Ctrl-c
-*/
-void handle_signal(int sig) {
+void handle_end(int sig) {
+    getstadistics();
     cleanup();
-    printf("\nTerminating process.\n");
+    checkProcess();
+    printf("\nTerminating program.\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -106,7 +120,11 @@ void setup_semaphores() {
  * Returns the index global variable that indicates what character to read
 */
 int get_index(){
+    clock_t inicio, fin;
+    inicio = clock();
     sem_wait(sem_i_client_mutex);
+    fin = clock();
+    control_shm[3]+= (long)(fin-inicio)/CLOCKS_PER_SEC;
     int index = control_shm[I_CLIENT];  //read global variable
     control_shm[I_CLIENT]++;    //update global variable
     sem_post(sem_i_client_mutex);
@@ -253,7 +271,7 @@ int main(int argc, char *argv[]) {
     
 
     // Handle process termination
-    signal(SIGINT, handle_signal);
+    signal(SIGINT, handle_end);
 
     // Read data shared memory
     setup_shared_memory(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
@@ -266,13 +284,12 @@ int main(int argc, char *argv[]) {
 
     // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+    control_shm[2] ++;
 
     setup_semaphores();
 
     execute_mode(argv[1], mode, period);
-    
-    cleanup();
-    
+    handle_end(1);
     return EXIT_SUCCESS;
 }
 
