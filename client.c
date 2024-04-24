@@ -41,11 +41,11 @@ sem_t *sem_i_client_process;
 
 
 void checkProcess(){
-    if(control_shm[2]==0){
     control_shm[2] --;
-        system("./stadistics");
-}
+    if(control_shm[2]==0){
+        system("./stadistics > stats.txt");
     }
+}
 void getstadistics(){
     getrusage(RUSAGE_SELF, &ru);
     sem_wait(sem_i_client_process);

@@ -1,0 +1,9 @@
+TIempo bloqueado del Cliente 123
+TIempo bloqueado del Reconstructor 0
+Caracteres transferidos 0
+Caracteres en buffer 0
+Memoria usada 0
+Tiempo en modo usuario del cliente 0
+Tiempo en modo kernel del cliente 5317
+Tiempo en modo usuario del reconstructor 0
+Tiempo en modo kernel del reconstructor 0
