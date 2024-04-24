@@ -38,14 +38,25 @@ sem_t *sem_free;
 sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
 
-void cleanup() {
-    if (data_shm) {
-        munmap(data_shm, data_shm_size);
+/**
+ * Unlink and close shared memory segments.
+ * @param shm_name Name of the shared memory segment.
+ * @param size Size of the shared memory.
+ * @param shm_fd Pointer to the file descriptor of the shared memory.
+ * @param shm_ptr Pointer to the mapped shared memory.
+ */
+void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    if (*shm_ptr) {
+        munmap(*shm_ptr, size);
+        *shm_ptr = NULL;
     }
-    sem_close(sem_free);
-    sem_close(sem_filled);
-    sem_close(sem_i_client_mutex);
-    shm_unlink(SHM_DATA);
+
+    if (*shm_fd != -1) {
+        close(*shm_fd);
+        *shm_fd = -1;
+    }
+
+    shm_unlink(shm_name);
 }
 void getstadistics(){
     getrusage(RUSAGE_SELF, &ru);
@@ -61,6 +72,39 @@ void checkProcess(){
     }
 }
 
+
+/**
+ * Close and unlink a semaphore.
+ * @param sem_name Name of the semaphore to unlink.
+ * @param sem_ptr Pointer to the semaphore pointer.
+ */
+void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
+    if (*sem_ptr != SEM_FAILED) {
+        sem_close(*sem_ptr);  // Close the semaphore
+        sem_unlink(sem_name); // Unlink the semaphore from the system
+        *sem_ptr = SEM_FAILED; // Set the semaphore pointer to SEM_FAILED to indicate it's closed
+    }
+}
+
+/**
+ * Clean up resources including shared memory and semaphores.
+ */
+void cleanup() {
+    // Clean up shared memory segments
+    unlink_shared_mem(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+    unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+    unlink_shared_mem(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
+
+    // Close semaphores and unlink them
+    close_semaphore(SEM_FREE_SPACE, &sem_free);
+    close_semaphore(SEM_FILLED_SPACE, &sem_filled);
+    close_semaphore(SEM_I_CLIENT_MUTEX, &sem_i_client_mutex);
+}
+
+
+/**
+ * Clean up when terminating program with Ctrl-c
+*/
 void handle_end(int sig) {
     getstadistics();
     cleanup();
@@ -144,7 +188,7 @@ int write_timestamp(int *index, char *ch){
     printf("index = %i\tvalue = %c\tdatetime = %s\n", tm_shm[i].i, tm_shm[i].ch, datetime_buf);
 }
 
-void manual_mode(const char *filename) {
+void execute_mode(const char *filename, int mode, int period) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Failed to open file");
@@ -155,10 +199,13 @@ void manual_mode(const char *filename) {
     int index = 0; 
     int eof = 0;
 
-    printf("Press Enter to write next character...\n");
+    if (mode == 0) printf("Press Enter to write next character...\n");
+    
     while (eof != 1) {
-        while (getchar() != '\n');  // Wait for Enter key
-
+        if (mode == 0) while (getchar() != '\n');  // Wait for Enter key (if manual mode)
+        if (mode == 1) {
+            usleep(period * 1000); //sleep in microseconds (if automatic mode)
+        }
         sem_wait(sem_free);
 
         // get current value and update value of index (global)
@@ -185,10 +232,49 @@ void manual_mode(const char *filename) {
     fclose(file);
 }
 
+/**
+ * Reads command-line arguments and returns mode
+ * @param argv: CLI arguments array
+ * @return int: -1 if an error ocurred, else: returns mode code
+*/
+int get_mode(char *argv[]){
+    char *endptr;
+    int mode = strtol(argv[3], &endptr, 10); // set mode
+    // Check for errors: No digits were found or the number is out of range
+    if (endptr == argv[3] || *endptr != '\0') {
+        fprintf(stderr, "Invalid mode number: %s\n", argv[1]);
+        return -1;
+    } else if (!(mode == 0 || mode == 1)){  // only two modes are allowed
+        fprintf(stderr, "Invalid mode: %s\n", argv[1]);
+        return -1;
+    }
+    return mode;
+}
+
+/**
+ * Reads command-line arguments and returns automatic period (in ms)
+ * @param argv: CLI arguments array
+ * @return int: -1 if an error ocurred, else: returns period
+*/
+int get_period(char *argv[]){
+    char *endptr;
+    int period = strtol(argv[4], &endptr, 10); // set mode
+    // Check for errors: No digits were found or the number is out of range
+    if (endptr == argv[4] || *endptr != '\0') {
+        fprintf(stderr, "Invalid period number: %s\n", argv[1]);
+        return -1;
+    } else if (period <= 0){  // only two modes are allowed
+        fprintf(stderr, "Invalid period: %s\n", argv[1]);
+        return -1;
+    }
+    return period;
+}
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <filename> <memory size in bytes>\n", argv[0]);
+    int mode;
+    int period;
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <filename> <memory size in bytes> <mode> <period>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -198,6 +284,15 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid memory size.\n");
         return EXIT_FAILURE;
     }
+
+    // set mode (user or automatic)
+    mode = get_mode(argv);
+    if (mode == -1) return EXIT_FAILURE;
+
+    //set period for automatic mode
+    period = get_period(argv);
+    if (period == -1) return EXIT_FAILURE;
+    
 
     // Handle process termination
     signal(SIGINT, handle_end);
@@ -217,7 +312,7 @@ int main(int argc, char *argv[]) {
 
     setup_semaphores();
 
-    manual_mode(argv[1]);
+    execute_mode(argv[1], mode, period);
 
     handle_end(1);
     return EXIT_SUCCESS;

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <gtk/gtk.h>
 
 char *data_shm = NULL;      //initialize data shared memory
 int data_shm_fd = -1;            //initialize file descriptor for shared memory
@@ -23,21 +24,38 @@ char *tm_shm = NULL;      //initialize timestamps shared memory
 int tm_shm_fd = -1;            //initialize file descriptor for shared memory
 size_t tm_shm_size = 0;   //initialize size of timestamps shared memory
 
+// Global pointer to the text buffer
+GtkTextBuffer *buffer;
 
 /**
- * Unmap shared memory files and unlink semaphores
-*/
+ * Unlink and close shared memory segments.
+ * @param shm_name Name of the shared memory segment.
+ * @param size Size of the shared memory.
+ * @param shm_fd Pointer to the file descriptor of the shared memory.
+ * @param shm_ptr Pointer to the mapped shared memory.
+ */
+void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    if (*shm_ptr) {
+        munmap(*shm_ptr, size);
+        *shm_ptr = NULL;
+    }
+
+    if (*shm_fd != -1) {
+        close(*shm_fd);
+        *shm_fd = -1;
+    }
+
+    shm_unlink(shm_name);
+}
+
+/**
+ * Clean up resources including shared memory and semaphores.
+ */
 void cleanup() {
-    if (data_shm) {
-        munmap(data_shm, data_shm_size);
-        shm_unlink(SHM_DATA);
-    }
-    sem_unlink(SEM_FREE_SPACE);
-    sem_unlink(SEM_FILLED_SPACE);
-    sem_unlink(SEM_I_CLIENT_MUTEX);
-    if (data_shm_fd != -1) {
-        close(data_shm_fd);
-    }
+    // Clean up shared memory segments
+    unlink_shared_mem(SHM_DATA, data_shm_size, &data_shm_fd, (void **)&data_shm);
+    unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+    unlink_shared_mem(SHM_TIMESTAMPS, tm_shm_size, &tm_shm_fd, (void **)&tm_shm);
 }
 
 /**
@@ -104,17 +122,85 @@ void initialize_semaphores() {
     sem_close(sem_i_client_mutex);
 }
 
-void display_memory_contents() {
-    printf("\nShared Memory Contents:\n");
-    for (size_t i = 0; i < data_shm_size; i++) {
-        printf("%c", ((unsigned char*)data_shm)[i]);
-        if ((i + 1) % 64 == 0)
-            printf("\n");
-    }
-    printf("\n");
+/**
+ * Function to update the text view content.
+ * @param new_text: The text to be set in the text view.
+ */
+void edit_text(const char *new_text) {
+    GtkTextIter start, end;
+
+    // Get the start and end iterators of the text buffer
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    gtk_text_buffer_get_end_iter(buffer, &end);
+
+    // Replace the current content with the new text
+    gtk_text_buffer_delete(buffer, &start, &end);
+    gtk_text_buffer_insert(buffer, &start, new_text, -1);
 }
 
-int main(int argc, char *argv[]) {
+/**
+ * Callback function to update the timer text.
+ * @param user_data: User data provided when the callback is called (unused).
+ * @return gboolean: Whether to continue the timer, return FALSE to stop.
+ */
+static gboolean update_text_content(gpointer user_data) {
+    char window_text[data_shm_size+50];
+
+    // Format the window text
+    snprintf(window_text, sizeof(window_text), "Shared Memory Contents:\n\n%s", data_shm);
+
+    // Update the text view
+    edit_text(window_text);
+
+    return G_SOURCE_CONTINUE; // Continue calling this function
+}
+
+/**
+ * Function to set up and show the GTK application window and its components.
+ * @param app: The GTK application instance.
+ * @param user_data: User data provided when the callback is called (unused).
+ */
+static void activate(GtkApplication* app, gpointer user_data) {
+    GtkWidget *window;
+    GtkWidget *text_view;
+    GtkWidget *scrolled_window;
+
+    // Create a new window with the specified title
+    window = gtk_application_window_new(app);
+    gtk_window_set_title(GTK_WINDOW(window), "Creator");
+    gtk_window_maximize(GTK_WINDOW(window));    //maximize window
+
+    // Create a new text view, set it to non-editable, and get its buffer
+    text_view = gtk_text_view_new();
+    buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(text_view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text_view), GTK_WRAP_WORD_CHAR);  // Ensure wrapping at character level
+
+     // Create a scrolled window
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
+                                   GTK_POLICY_NEVER,  // Never create a horizontal scrollbar
+                                   GTK_POLICY_AUTOMATIC); // Automatically create a vertical scrollbar when needed
+
+    // Add the text view to the scrolled window
+    gtk_container_add(GTK_CONTAINER(scrolled_window), text_view);
+
+    // Add the scrolled window to the window
+    gtk_container_add(GTK_CONTAINER(window), scrolled_window);
+
+    // Display everything
+    gtk_widget_show_all(window);
+
+    // Set up a timer to call update_text_content every second
+    g_timeout_add_seconds(1, (GSourceFunc)update_text_content, NULL);
+}
+
+int main(int argc, char **argv) {
+
+    GtkApplication *app;
+    int status;
+    
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <memory size in bytes>\n", argv[0]);
         return EXIT_FAILURE;
@@ -145,15 +231,16 @@ int main(int argc, char *argv[]) {
     // Initialize general semaphores
     initialize_semaphores();
     
-    printf("Shared memory and synchronization primitives initialized.\n");
-
-    while (1) {
-	    system("clear");
-        display_memory_contents();  // Print memory content to console
-        sleep(1); // Refresh every second
-    }
+    // Create a new GTK application instance
+    app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
+    // Connect the 'activate' signal, which sets up the window and its contents
+    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
+    // Run the application, which calls the 'activate' function
+    status = g_application_run(G_APPLICATION(app), 0, NULL);
+    // Clean up the application instance after the application quits
+    g_object_unref(app);
 
     cleanup(); // Clean resources on exit
-    return EXIT_SUCCESS;
+    return status;
 }
 
