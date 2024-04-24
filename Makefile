@@ -9,7 +9,7 @@ STADISTICS_BIN = stadistics
 STADISTICS_SRC = stadistics.c
 GCC = gcc
 CFLAGS = -lrt -pthread
-MEMORY_SIZE = 8  	# Set default memory size in bytes
+MEMORY_SIZE = 4096 	# Set default memory size in bytes
 CONSTANTS = constants.h
 TEXT_FILE = lorem.txt 	# Set default text file to read
 MODE = 1 	#0 = manual mode, 1 = automatic mode
@@ -22,7 +22,7 @@ $(CLIENT_BIN): $(CLIENT_SRC) $(CONSTANTS)
 	$(GCC) $(CFLAGS) `pkg-config --cflags gtk+-3.0` -o $@ $< `pkg-config --libs gtk+-3.0`
 
 $(RECREATOR_BIN): $(RECREATOR_SRC) $(CONSTANTS)
-	$(GCC) $(CFLAGS) $< -o $@
+	$(GCC) $(CFLAGS) `pkg-config --cflags gtk+-3.0` -o $@ $< `pkg-config --libs gtk+-3.0`
 
 $(CREATOR_BIN): $(CREATOR_SRC) $(CONSTANTS) 
 	$(GCC) $(CFLAGS) `pkg-config --cflags gtk+-3.0` -o $@ $< `pkg-config --libs gtk+-3.0`

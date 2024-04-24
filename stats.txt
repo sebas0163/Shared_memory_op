@@ -1,9 +1,9 @@
 Tiempo bloqueado del Cliente 0 ms
-Tiempo bloqueado del Reconstructor 0 ms
-Caracteres transferidos 0
-Caracteres en buffer 8
-Memoria usada 96 bytes
-Tiempo en modo usuario del cliente 215124 ns 
-Tiempo en modo kernel del cliente 50630 ns 
-Tiempo en modo usuario del reconstructor 0 ns 
-Tiempo en modo kernel del reconstructor 0 ns 
+Tiempo bloqueado del Reconstructor 66296 ms
+Caracteres transferidos 18
+Caracteres en buffer 6
+Memoria usada 1266 bytes
+Tiempo en modo usuario del cliente 426116 ns 
+Tiempo en modo kernel del cliente 1490742 ns 
+Tiempo en modo usuario del reconstructor 186033 ns 
+Tiempo en modo kernel del reconstructor 949705 ns 

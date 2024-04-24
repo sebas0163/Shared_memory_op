@@ -14,7 +14,7 @@
 
 #define I_CLIENT 0
 #define I_RECREATOR 1
-#define N_PROCESORS 2
+#define N_PROCESSES 2
 
 #endif // CONSTANTS_H
 

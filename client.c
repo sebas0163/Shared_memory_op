@@ -53,7 +53,6 @@ typedef struct {
     int period;
 } ExecuteModeArgs;
 
-
 /**
  * Count how many chars still in the buffer
 */
@@ -145,6 +144,9 @@ void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **
     }
 }
 
+/**
+ * Open sempahores created in creator process
+*/
 void setup_semaphores() {
     sem_free = sem_open(SEM_FREE_SPACE, 0);
     sem_filled = sem_open(SEM_FILLED_SPACE, 0);
@@ -447,7 +449,7 @@ int main(int argc, char *argv[]) {
     // Read control shared memory
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
 
-    control_shm[2] ++; //register new process to processes counter
+    control_shm[N_PROCESSES] ++; //register new process to processes counter
 
     setup_semaphores();
 
@@ -461,7 +463,7 @@ int main(int argc, char *argv[]) {
 
     // Create a new GTK application instance
     char app_id[100] = "org.gtk.client";
-    sprintf(app_id + strlen(app_id), "%ld", control_shm[2]); //set unique ID
+    sprintf(app_id + strlen(app_id), "%ld", control_shm[N_PROCESSES]); //set unique ID
     app = gtk_application_new(app_id, G_APPLICATION_FLAGS_NONE);
     // Connect the 'activate' signal, which sets up the window and its contents
     g_signal_connect(app, "activate", G_CALLBACK(activate_client_win), NULL);
