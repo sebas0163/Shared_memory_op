@@ -39,42 +39,21 @@ sem_t *sem_filled;
 sem_t *sem_i_client_mutex;
 sem_t *sem_i_client_process;
 
-/**
- * Unlink and close shared memory segments.
- * @param shm_name Name of the shared memory segment.
- * @param size Size of the shared memory.
- * @param shm_fd Pointer to the file descriptor of the shared memory.
- * @param shm_ptr Pointer to the mapped shared memory.
- */
-void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
-    if (*shm_ptr) {
-        munmap(*shm_ptr, size);
-        *shm_ptr = NULL;
-    }
 
-    if (*shm_fd != -1) {
-        close(*shm_fd);
-        *shm_fd = -1;
-    }
-
-    shm_unlink(shm_name);
-}
 void checkProcess(){
-    control_shm[2] --;
     if(control_shm[2]==0){
+    control_shm[2] --;
         system("./stadistics");
-    }
 }
+    }
 void getstadistics(){
-    sem_wait(sem_i_client_process);
     getrusage(RUSAGE_SELF, &ru);
-    control_shm[8] += ru.ru_utime.tv_usec;
+    sem_wait(sem_i_client_process);
     control_shm[9]+=ru.ru_stime.tv_usec;
+    control_shm[8] += ru.ru_utime.tv_usec;
     checkProcess();
     sem_post(sem_i_client_process);
 }
-
-
 /**
  * Close and unlink a semaphore.
  * @param sem_name Name of the semaphore to unlink.
@@ -92,7 +71,6 @@ void close_semaphore(const char *sem_name, sem_t **sem_ptr) {
  * Clean up resources including shared memory and semaphores.
  */
 void cleanup() {
-
     // Close semaphores and unlink them
     close_semaphore(SEM_FREE_SPACE, &sem_free);
     close_semaphore(SEM_FILLED_SPACE, &sem_filled);
@@ -188,7 +166,7 @@ int write_timestamp(int *index, char *ch){
 }
 
 void execute_mode(const char *filename, int mode, int period) {
-    FILE *file = fopen(filename, "r");
+    FILE *file = fopen(filename, "r+");
     if (!file) {
         perror("Failed to open file");
         exit(EXIT_FAILURE);
@@ -199,7 +177,7 @@ void execute_mode(const char *filename, int mode, int period) {
     int eof = 0;
 
     if (mode == 0) printf("Press Enter to write next character...\n");
-    
+
     while (eof != 1) {
         if (mode == 0) while (getchar() != '\n');  // Wait for Enter key (if manual mode)
         if (mode == 1) {
@@ -214,6 +192,10 @@ void execute_mode(const char *filename, int mode, int period) {
         fseek(file, index, SEEK_SET);
         fread(&ch, 1, 1, file);
 
+        char blank = 32;    //blank space
+        fseek(file, index, SEEK_SET);
+        fputc(blank, file);     //overwrite position with blank space
+
         if (feof(file)) eof = 1;    //reached end of file
         else{
             // write timestamp to shared memory
@@ -221,7 +203,6 @@ void execute_mode(const char *filename, int mode, int period) {
 
             // Write the character to shared memory
             index = index % data_shm_size;  // Circular buffer
-            
             data_shm[index] = ch;
 
             sem_post(sem_filled);
