@@ -110,8 +110,9 @@ void initialize_semaphores() {
     sem_t *sem_free = sem_open(SEM_FREE_SPACE, O_CREAT, 0666, data_shm_size);
     sem_t *sem_filled = sem_open(SEM_FILLED_SPACE, O_CREAT, 0666, 0);
     sem_t *sem_i_client_mutex = sem_open(SEM_I_CLIENT_MUTEX, O_CREAT, 0666, 1);
+    sem_t *sem_i_client_process = sem_open(SEM_I_CLIENT_PROCESS,O_CREAT,0666,1);
 
-    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED) {
+    if (sem_free == SEM_FAILED || sem_filled == SEM_FAILED || sem_i_client_mutex == SEM_FAILED || sem_i_client_process == SEM_FAILED) {
         perror("Failed to open semaphore");
         cleanup();
         exit(EXIT_FAILURE);
@@ -120,6 +121,7 @@ void initialize_semaphores() {
     sem_close(sem_free);
     sem_close(sem_filled);
     sem_close(sem_i_client_mutex);
+    sem_close(sem_i_client_process);
 }
 
 /**

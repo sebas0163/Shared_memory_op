@@ -17,9 +17,40 @@
 
 long *control_shm = NULL;      //initialize control shared memory
 int control_shm_fd = -1;            //initialize file descriptor for shared memory
-size_t control_shm_size = sizeof(long) * 9;   //initialize size of data shared memory
+size_t control_shm_size = sizeof(long) * 12;   //initialize size of data shared memory
 
+/**
+ * Unlink and close shared memory segments.
+ * @param shm_name Name of the shared memory segment.
+ * @param size Size of the shared memory.
+ * @param shm_fd Pointer to the file descriptor of the shared memory.
+ * @param shm_ptr Pointer to the mapped shared memory.
+ */
+void unlink_shared_mem(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
+    if (*shm_ptr) {
+        munmap(*shm_ptr, size);
+        *shm_ptr = NULL;
+    }
+
+    if (*shm_fd != -1) {
+        close(*shm_fd);
+        *shm_fd = -1;
+    }
+
+    shm_unlink(shm_name);
+}
+void cleanup(){
+    unlink_shared_mem(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
+}
 //iniciar memoria
+/**
+ * Set up shared memory
+ *
+ * @param shm_name Name of the shared memory segment to open
+ * @param size Size of the shared memory to map
+ * @param shm_fd Pointer to store the file descriptor of the shared memory
+ * @param shm_ptr Pointer to store the address of the mapped shared memory
+ */
 void setup_shared_memory(const char *shm_name, size_t size, int *shm_fd, void **shm_ptr) {
     *shm_fd = shm_open(shm_name, O_RDWR, 0666);
     if (*shm_fd == -1) {
@@ -68,4 +99,5 @@ void prueba(){
 int main(){
     setup_shared_memory(SHM_CONTROL, control_shm_size, &control_shm_fd, (void **)&control_shm);
     getstadistics();
+    cleanup();
 }
