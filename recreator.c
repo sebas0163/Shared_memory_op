@@ -277,7 +277,7 @@ void execute_mode(const char *filename, int mode, int period) {
             sem_post(sem_free);
         }
     }
-
+    printf("Recreator ended transcription. Closing file...\n");
     fclose(file);
 }
 
