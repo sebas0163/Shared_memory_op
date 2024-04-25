@@ -284,7 +284,7 @@ void execute_mode(const char *filename, int mode, int period) {
             sem_getvalue(sem_filled, &sem_value);
         }
     }
-
+    printf("Client ended transcription. Closing file...\n");
     fclose(file);
 }
 
