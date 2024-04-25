@@ -12,8 +12,20 @@ sudo apt-get install libgtk-3-dev
 make
 ```
 
-### How to compile and run:
+### How to run creator process:
 
 ```
-make run
+make run_creator
+```
+
+### How to run client process:
+
+```
+make run_client
+```
+
+### How to run recreator process:
+
+```
+make run_recreator
 ```
